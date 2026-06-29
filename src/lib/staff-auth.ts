@@ -1,0 +1,5 @@
+import "server-only"; import { redirect } from "next/navigation"; import { createStaffClient } from "./supabase/server"; import { createAdminClient } from "./supabase/admin";
+export async function getStaff(){const staff=await createStaffClient();const {data:{user}}=await staff.auth.getUser();if(!user)return null;const {data:profile}=await createAdminClient().from("profiles").select("id,auth_user_id,username,name,whatsapp_number,role,must_change_password,is_active").eq("auth_user_id",user.id).eq("is_active",true).maybeSingle();return profile?{user,profile}:null}
+export async function requireAdmin(){const staff=await getStaff();if(!staff)redirect("/staff/login");if(staff.profile.role!=="admin")redirect("/coordinator");return staff}
+export async function requireCoordinator(){const staff=await getStaff();if(!staff)redirect("/staff/login");if(staff.profile.role!=="coordinator")redirect("/admin");if(staff.profile.must_change_password)redirect("/staff/change-password");return staff}
+export async function requireStaffApi(role?:"admin"|"coordinator"){const staff=await getStaff();if(!staff||role&&staff.profile.role!==role)return null;return staff}

@@ -1,0 +1,2 @@
+export function visibleStatus(progress:string,verification:string){if(verification==="verified")return "Verified";if(verification==="rejected")return "Rejected";if(verification==="resubmission_required")return "Resubmission Required";if(verification==="pending_verification")return "Submitted — Awaiting Verification";if(progress==="ongoing")return "Ongoing";return "Not Started"}
+export const titleCase=(value:string)=>value.replaceAll("_"," ").replace(/\b\w/g,c=>c.toUpperCase());
