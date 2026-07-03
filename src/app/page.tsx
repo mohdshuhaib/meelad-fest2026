@@ -32,7 +32,7 @@ export default function Home() {
               </Link>
               <Link
                 href="/login"
-                className="flex min-h-16 items-center justify-center gap-3 rounded-2xl border border-white/30 bg-white/15 px-6 text-base font-black text-white shadow-[0_18px_35px_rgba(0,0,0,.2)] backdrop-blur transition hover:-translate-y-1 hover:bg-white/25"
+                className="flex min-h-16 items-center justify-center gap-3 rounded-2xl bg-emerald px-6 text-base font-black text-white shadow-[0_18px_35px_rgba(0,0,0,.24)] ring-1 ring-white/15 transition hover:-translate-y-1 hover:bg-[#063d35]"
               >
                 <LogIn size={21} />
                 Login
