@@ -5,6 +5,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { RegistrationForm } from "./registration-form";
 
 export const metadata: Metadata = { title: "Register" };
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 function formatIst(value: string) {
   return (

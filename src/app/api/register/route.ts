@@ -40,16 +40,18 @@ export async function POST(request: Request) {
       .eq("id", true)
       .maybeSingle();
     const now = new Date();
-    if (
-      settings &&
-      (!settings.registration_enabled ||
-        (settings.registration_open_at &&
-          now < new Date(settings.registration_open_at)) ||
-        (settings.registration_close_at &&
-          now > new Date(settings.registration_close_at)))
-    )
+    const registrationBlockReason = settings && !settings.registration_enabled
+      ? "Registration is currently disabled by the admin."
+      : settings?.registration_open_at &&
+          now < new Date(settings.registration_open_at)
+        ? "Registration has not started yet."
+        : settings?.registration_close_at &&
+            now > new Date(settings.registration_close_at)
+          ? "Registration is closed."
+          : "";
+    if (registrationBlockReason)
       return NextResponse.json(
-        { message: "Registration is currently closed." },
+        { message: registrationBlockReason },
         { status: 403 },
       );
     const { data: duplicate } = await supabase
