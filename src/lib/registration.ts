@@ -3,7 +3,7 @@ import { DISTRICTS } from "./constants";
 
 const normalise = (value:string) => value.trim().replace(/\s+/g," ").toUpperCase();
 const nameLike = z.string().min(2).max(160).transform(normalise).pipe(z.string().regex(/^[A-Z '-]+$/, "Use English letters, spaces, apostrophes or hyphens only"));
-const phone = z.string().regex(/^[6-9]\d{9}$/, "Enter a valid 10-digit Indian mobile number");
+const phone = z.string().regex(/^\+?\d{6,15}$/, "Enter a valid phone number");
 
 export function getAgeAndCategory(dob:string, now=new Date()) {
   const birth = new Date(`${dob}T00:00:00+05:30`);
