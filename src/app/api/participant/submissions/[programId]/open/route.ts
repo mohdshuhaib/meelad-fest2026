@@ -13,7 +13,7 @@ export async function POST(
   const { data: s } = await admin
     .from("participant_programs")
     .select(
-      "id,participant_progress_status,verification_status,programs(submission_form_url,registration_id_entry_key,full_name_entry_key,global_status)",
+      "id,form_opened_at,participant_progress_status,verification_status,programs(submission_form_url,registration_id_entry_key,full_name_entry_key,global_status)",
     )
     .eq("participant_id", p.id)
     .eq("program_id", programId)
@@ -29,6 +29,11 @@ export async function POST(
     return NextResponse.json(
       { message: "Submission form is not configured for this programme." },
       { status: 404 },
+    );
+  if (s.form_opened_at)
+    return NextResponse.json(
+      { message: "Submission form has already been opened once. If you encountered an error, please ask the admin for a reset." },
+      { status: 403 },
     );
   const url = new URL(program.submission_form_url);
   if (program.registration_id_entry_key)

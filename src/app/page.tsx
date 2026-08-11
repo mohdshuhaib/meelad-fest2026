@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { LogIn, UserPlus } from "lucide-react";
 
@@ -12,9 +13,13 @@ export default function Home() {
       <section className="relative z-10 mx-auto grid min-h-[calc(100svh-2.5rem)] w-full max-w-6xl place-items-center">
         <div className="grid w-full items-center gap-8 lg:grid-cols-[1fr_.9fr]">
           <div className="text-center lg:text-left">
-            <div className="mx-auto mb-5 grid size-16 place-items-center rounded-[1.4rem] border border-gold/50 bg-white/10 text-xl font-black text-gold shadow-2xl shadow-black/25 backdrop-blur lg:mx-0">
-              AS
-            </div>
+            <Image
+              src="/logo.png"
+              alt="Ahlu Saada Logo"
+              width={64}
+              height={64}
+              className="mx-auto mb-5 rounded-[1.4rem] shadow-2xl shadow-black/25 lg:mx-0"
+            />
             <p className="text-xs font-bold uppercase tracking-[.35em] text-gold">
               Ahlu Saada
             </p>

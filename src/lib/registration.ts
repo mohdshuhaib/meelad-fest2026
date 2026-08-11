@@ -2,7 +2,7 @@ import { z } from "zod";
 import { DISTRICTS } from "./constants";
 
 const normalise = (value:string) => value.trim().replace(/\s+/g," ").toUpperCase();
-const nameLike = z.string().min(2).max(160).transform(normalise).pipe(z.string().regex(/^[A-Z '-]+$/, "Use English letters, spaces, apostrophes or hyphens only"));
+const nameLike = z.string().min(2, "Must be at least 2 characters").max(160).transform(normalise).pipe(z.string().regex(/^[A-Z '-]+$/, "Use English letters, spaces, apostrophes or hyphens only"));
 const phone = z.string().regex(/^\+?\d{6,15}$/, "Enter a valid phone number");
 
 export function getAgeAndCategory(dob:string, now=new Date()) {
@@ -15,7 +15,7 @@ export function getAgeAndCategory(dob:string, now=new Date()) {
 }
 
 export const registrationSchema = z.object({
-  name:nameLike, place:nameLike, district:z.enum(DISTRICTS), dateOfBirth:z.string(),
+  name:nameLike, place:nameLike, district:z.string().min(1, "Please select a district").pipe(z.enum(DISTRICTS)), dateOfBirth:z.string().min(1, "Enter a valid date of birth"),
   gender:z.enum(["male","female"]), whatsappNumber:phone, phoneNumber:phone,
 }).superRefine((data,ctx)=>{ try { const {age}=getAgeAndCategory(data.dateOfBirth); if(age<15) ctx.addIssue({code:"custom",path:["dateOfBirth"],message:"You must be at least 15 years old"}); } catch(e) { ctx.addIssue({code:"custom",path:["dateOfBirth"],message:e instanceof Error?e.message:"Invalid date"}); } });
 

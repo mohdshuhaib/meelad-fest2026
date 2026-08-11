@@ -74,6 +74,7 @@ export function SubmissionCard({
   const canOpenForm =
     (isOngoing || needsResubmission) &&
     !awaitingOrVerified &&
+    !s.form_opened_at &&
     (s.participant_progress_status !== "claimed_submitted" ||
       needsResubmission);
   const canClaim =
