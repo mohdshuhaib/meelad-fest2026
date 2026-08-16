@@ -22,7 +22,7 @@ export default async function Programs() {
       admin
         .from("programs")
         .select(
-          "id,code,name,description,gender_eligibility,category_eligibility,global_status",
+          "id,code,name,description,rules,gender_eligibility,category_eligibility,global_status",
         )
         .or(`gender_eligibility.eq.general,gender_eligibility.eq.${p.gender}`)
         .or(

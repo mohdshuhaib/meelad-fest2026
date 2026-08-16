@@ -6,6 +6,7 @@
   --color-cream:#f5f0e4; --color-ink:#172623; --color-muted:#64706d;
   --color-emerald:#074a40; --color-gold:#d0a95b;
   --font-sans:var(--font-inter); --font-serif:var(--font-lora);
+  --font-malayalam:var(--font-anek-malayalam);
 }
 * { box-sizing:border-box; }
 body { margin:0; background:var(--background); color:var(--foreground); font-family:var(--font-inter),sans-serif; }

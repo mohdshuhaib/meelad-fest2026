@@ -7,6 +7,7 @@ type Program = {
   code: string;
   name: string;
   description: string | null;
+  rules: string | null;
   gender_eligibility: string;
   category_eligibility: string;
   global_status: string;
@@ -138,6 +139,14 @@ export function ProgramSelector({
                 <p className="mt-3 text-sm leading-6 text-muted">
                   {program.description}
                 </p>
+              )}
+              {program.rules && (
+                <div className="mt-4 rounded-xl bg-amber-50 p-4 border border-amber-200/50">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-amber-900/60 mb-2">Rules</p>
+                  <p className="text-[15px] leading-relaxed text-amber-900 font-malayalam whitespace-pre-wrap">
+                    {program.rules}
+                  </p>
+                </div>
               )}
               <div className="mt-4 flex flex-wrap gap-2">
                 {[
