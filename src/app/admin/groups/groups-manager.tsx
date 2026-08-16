@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, LoaderCircle, Plus, Shuffle, Users } from "lucide-react";
 
+import { GroupEdit } from "./group-edit";
+
 type Person = {
   id: string;
   registration_id: string;
@@ -181,23 +183,29 @@ export function GroupsManager({
 
       <div className="mt-6 grid gap-4 xl:grid-cols-2">
         {groups.map((g) => (
-          <details key={g.id} className="rounded-2xl bg-white shadow-sm">
+          <details key={g.id} className="group rounded-2xl bg-white shadow-sm">
             <summary className="cursor-pointer list-none p-5">
-              <div className="flex justify-between gap-4">
+              <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-xs font-bold text-gold">
                     {g.is_active ? "ACTIVE" : "DISABLED"}
                   </p>
-                  <h2 className="font-serif text-2xl font-semibold">
+                  <h2 className="font-serif text-2xl font-semibold flex items-center gap-2">
                     {g.name}
+                    <GroupEdit group={{ id: g.id, name: g.name, whatsapp_group_link: g.whatsapp_group_link }} />
                   </h2>
                   <p className="mt-2 text-xs text-muted">
                     Coordinator: {g.coordinator ?? "NOT ASSIGNED"}
                   </p>
+                  {g.whatsapp_group_link && (
+                    <a href={g.whatsapp_group_link} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs font-semibold text-emerald hover:underline">
+                      WhatsApp Link ↗
+                    </a>
+                  )}
                 </div>
-                <div className="flex items-center gap-3 text-emerald">
+                <div className="flex items-center gap-3 text-emerald mt-1">
                   <Users />
-                  <ChevronDown size={18} />
+                  <ChevronDown size={18} className="transition-transform group-open:-rotate-180" />
                 </div>
               </div>
               <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs sm:grid-cols-6">
