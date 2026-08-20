@@ -135,7 +135,7 @@ export default async function Participants({
                   </div>
                 </div>
                 <a
-                  href={`https://wa.me/91${person.whatsapp_number}?text=${encodeURIComponent(`ASSALAMU ALAIKUM. THIS IS THE AHLU SAADA MEELAD FEST ORGANISING TEAM REGARDING REGISTRATION ${person.registration_id}.`)}`}
+                  href={`https://wa.me/91${person.whatsapp_number}?text=${encodeURIComponent(`ASSALAMU ALAIKUM. THIS IS THE AHLU SAADA All Kerala Islamic Fest ORGANISING TEAM REGARDING REGISTRATION ${person.registration_id}.`)}`}
                   target="_blank"
                   rel="noreferrer"
                   className="grid size-10 shrink-0 place-items-center rounded-full bg-[#1fa855] text-white"

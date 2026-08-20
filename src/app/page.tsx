@@ -24,7 +24,7 @@ export default function Home() {
               Ahlu Saada
             </p>
             <h1 className="mx-auto mt-4 max-w-3xl font-serif text-5xl font-semibold leading-[.95] text-white drop-shadow-2xl sm:text-7xl lg:mx-0 lg:text-8xl">
-              Meelad Fest <span className="text-gold">2026</span>
+              Islamic Fest
             </h1>
 
             <div className="mx-auto mt-8 grid max-w-sm gap-3 sm:max-w-xl sm:grid-cols-2 lg:mx-0">

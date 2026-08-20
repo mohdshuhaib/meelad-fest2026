@@ -64,7 +64,7 @@ export default async function Programs() {
         Programme selection
       </p>
       <h1 className="mt-2 font-serif text-3xl font-semibold">
-        Meelad Fest Programs
+        Islamic Fest Programs
       </h1>
       <p className="mt-3 text-sm font-semibold leading-6 text-muted">
         Select or remove programmes only while programme selection is active.

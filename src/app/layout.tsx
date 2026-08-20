@@ -7,8 +7,8 @@ const lora = Lora({ variable:"--font-lora", subsets:["latin"] });
 const anekMalayalam = Anek_Malayalam({ variable:"--font-anek-malayalam", subsets:["malayalam"] });
 
 export const metadata: Metadata = {
-  title:{ default:"Ahlu Saada Meelad Fest", template:"%s | Ahlu Saada Meelad Fest" },
-  description:"Registration and programme portal for Ahlu Saada Meelad Fest.",
+  title:{ default:"All Kerala Islamic Fest", template:"%s | Islamic Fest" },
+  description:"Registration and programme portal for All Kerala Islamic Fest.",
 };
 
 export default function RootLayout({ children }:{ children:React.ReactNode }) {

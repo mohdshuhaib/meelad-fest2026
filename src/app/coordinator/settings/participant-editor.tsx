@@ -18,7 +18,7 @@ type Person = {
 
 function whatsappUrl(person: Person) {
   const text = encodeURIComponent(
-    `ASSALAMU ALAIKUM ${person.name}. I AM YOUR AHLU SAADA MEELAD FEST COORDINATOR. REGISTRATION ID: ${person.registration_id}.`,
+    `ASSALAMU ALAIKUM ${person.name}. I AM YOUR AHLU SAADA ALL KERALA ISLAMIC FEST COORDINATOR. REGISTRATION ID: ${person.registration_id}.`,
   );
   return `https://wa.me/91${person.whatsapp_number}?text=${text}`;
 }

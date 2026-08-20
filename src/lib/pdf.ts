@@ -22,7 +22,7 @@ export async function detailsPdf(
     height: 125,
     color: green,
   });
-  page.drawText("AHLU SAADA MEELAD FEST", {
+  page.drawText("AHLU SAADA ISLAMIC FEST", {
     x: 48,
     y: height - 57,
     size: 22,
@@ -131,7 +131,7 @@ export async function detailsPdf(
     `GENERATED ${new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" }).format(new Date())} IST`,
     { x: 48, y: 32, size: 7, font: regular, color: rgb(0.4, 0.44, 0.43) },
   );
-  page.drawText("AHLU SAADA MEELAD FEST", {
+  page.drawText("AHLU SAADA ISLAMIC FEST", {
     x: width - 190,
     y: 32,
     size: 7,

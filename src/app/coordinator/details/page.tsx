@@ -5,7 +5,7 @@ import { CoordinatorVerify } from "./verify";
 
 function whatsappUrl(number: string, name: string, registrationId: string) {
   const text = encodeURIComponent(
-    `ASSALAMU ALAIKUM ${name}. I AM YOUR AHLU SAADA MEELAD FEST COORDINATOR. REGISTRATION ID: ${registrationId}.`,
+    `ASSALAMU ALAIKUM ${name}. I AM YOUR AHLU SAADA ALL KERALA ISLAMIC FEST COORDINATOR. REGISTRATION ID: ${registrationId}.`,
   );
   return `https://wa.me/91${number}?text=${text}`;
 }

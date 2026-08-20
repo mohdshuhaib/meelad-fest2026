@@ -47,7 +47,7 @@ export default async function RegisterPage() {
         </Link>
         <header className="mt-8 mb-8">
           <p className="text-xs font-bold uppercase tracking-[.25em] text-gold">
-            Ahlu Saada · Meelad Fest 2026
+            Ahlu Saada · All Kerala Islamic Fest
           </p>
           <h1 className="mt-3 font-serif text-4xl font-semibold sm:text-5xl">
             Participant registration
