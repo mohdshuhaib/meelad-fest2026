@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { LogIn, UserPlus } from "lucide-react";
+import { LogIn, UserPlus, Trophy } from "lucide-react";
 
 export default function Home() {
   return (
@@ -41,6 +41,13 @@ export default function Home() {
               >
                 <LogIn size={21} />
                 Login
+              </Link>
+              <Link
+                href="/results"
+                className="col-span-full flex min-h-16 items-center justify-center gap-3 rounded-2xl border-2 border-gold/40 bg-[#082f2a]/60 px-6 text-base font-black text-gold shadow-[0_18px_35px_rgba(0,0,0,.24)] backdrop-blur-sm transition hover:-translate-y-1 hover:border-gold hover:bg-[#063d35]"
+              >
+                <Trophy size={22} className="text-gold animate-pulse" />
+                Results & Leaderboard
               </Link>
             </div>
           </div>
