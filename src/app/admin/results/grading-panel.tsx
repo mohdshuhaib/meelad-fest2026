@@ -45,6 +45,13 @@ export function GradingPanel({ pp }: { pp: any }) {
         <p className="mt-1 text-xs text-muted">
           {p.district} • {p.category.replace("_", " ")}
         </p>
+
+        {pp.swalath_total !== undefined && pp.swalath_total !== null && pp.swalath_total > 0 && (
+          <div className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-emerald/10 px-2.5 py-1 text-xs font-black text-emerald">
+            <span>✨ Total Swalath Logged:</span>
+            <span className="font-serif text-sm font-black">{pp.swalath_total.toLocaleString()}</span>
+          </div>
+        )}
         
         {hasResult && (
           <div className="mt-3 flex items-center gap-2 text-xs font-bold text-emerald">

@@ -1,10 +1,13 @@
 import Link from "next/link";
-import { Search, Download } from "lucide-react";
+import { Search, Download, Sparkles, Calendar, Trophy, Users } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { titleCase } from "@/lib/program-status";
+import { isSwalathProgram, formatDateDMY } from "@/lib/program-rules";
 import { ProgramForm } from "./program-form";
 import { ProgramEdit } from "./program-edit";
+
 const PAGE_SIZE = 15;
+
 export default async function AdminPrograms({
   searchParams,
 }: {
@@ -15,7 +18,10 @@ export default async function AdminPrograms({
   const db = createAdminClient();
   let query = db
     .from("programs")
-    .select("*,participant_programs(verification_status)", { count: "exact" });
+    .select(
+      "*,participant_programs(verification_status,swalath_total,participants(name,registration_id,district))",
+      { count: "exact" }
+    );
   if (p.q)
     query = query.or(
       `code.ilike.%${p.q.replace(/[%,]/g, "")}%,name.ilike.%${p.q.replace(/[%,]/g, "")}%`,
@@ -103,25 +109,74 @@ export default async function AdminPrograms({
           }
         />
       </div>
-      <div className="mt-5 space-y-3">
+      <div className="mt-5 space-y-4">
         {data?.map((program, index) => {
-          const selected = program.participant_programs;
+          const selected = program.participant_programs || [];
+          const isSwalath = isSwalathProgram(program);
+
+          // For swalath campaigns, calculate top 10 members
+          let topSwalathMembers: Array<{
+            name: string;
+            registrationId: string;
+            district: string;
+            total: number;
+          }> = [];
+          let grandSwalathTotal = 0;
+
+          if (isSwalath) {
+            for (const pp of selected) {
+              const countNum = pp.swalath_total || 0;
+              grandSwalathTotal += countNum;
+              const pData = Array.isArray(pp.participants) ? pp.participants[0] : pp.participants;
+              if (countNum > 0 && pData) {
+                topSwalathMembers.push({
+                  name: pData.name,
+                  registrationId: pData.registration_id,
+                  district: pData.district,
+                  total: countNum,
+                });
+              }
+            }
+
+            topSwalathMembers.sort((a, b) => b.total - a.total);
+            topSwalathMembers = topSwalathMembers.slice(0, 10);
+          }
+
           return (
             <article
               key={program.id}
-              className="rounded-2xl bg-white p-5 shadow-sm"
+              className={`rounded-2xl bg-white p-5 shadow-sm sm:p-6 ${
+                isSwalath ? "ring-2 ring-gold/40 border border-gold/20" : ""
+              }`}
             >
               <div className="flex items-start gap-4">
                 <span className="text-xs font-bold text-muted">
                   {(page - 1) * PAGE_SIZE + index + 1}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-bold tracking-wider text-gold">
-                    {program.code}
-                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-xs font-bold tracking-wider text-gold">
+                      {program.code}
+                    </p>
+                    {isSwalath && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-gold/20 px-2.5 py-0.5 text-[10px] font-black uppercase text-emerald">
+                        <Sparkles size={12} className="text-gold" />
+                        Daily Swalath Campaign
+                      </span>
+                    )}
+                  </div>
                   <h2 className="font-serif text-xl font-semibold">
                     {program.name}
                   </h2>
+
+                  {/* Campaign Dates for Swalath Campaign */}
+                  {isSwalath && (
+                    <div className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-cream px-3 py-1 text-xs font-bold text-ink">
+                      <Calendar size={14} className="text-emerald" />
+                      Campaign Period: {formatDateDMY(program.campaign_start_date || "2026-08-22")} to {formatDateDMY(program.campaign_end_date || "2026-09-05")}
+                    </div>
+                  )}
+
                   <div className="mt-3 flex flex-wrap gap-2">
                     {[
                       ["category", program.category_eligibility],
@@ -136,6 +191,7 @@ export default async function AdminPrograms({
                       </span>
                     ))}
                   </div>
+
                   <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
                     <span>
                       <b className="block text-lg">{selected.length}</b>Selected
@@ -163,13 +219,88 @@ export default async function AdminPrograms({
                       Verified
                     </span>
                   </div>
-                  {program.description && <p className="mt-4 text-sm leading-6 text-muted">{program.description}</p>}
-                  <div className="mt-4"><ProgramEdit program={program}/></div>
+
+                  {isSwalath && (
+                    <div className="mt-4 rounded-xl bg-emerald/10 p-3 text-center sm:text-left">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-emerald">
+                        Grand Total Swalath Logged Across All Participants:
+                      </span>
+                      <p className="font-serif text-2xl font-black text-emerald">
+                        {grandSwalathTotal.toLocaleString()}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* TOP 10 SWALATH LEADERS SECTION FOR ADMIN */}
+                  {isSwalath && topSwalathMembers.length > 0 && (
+                    <div className="mt-5 rounded-2xl border border-ink/10 bg-cream/30 p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Trophy size={16} className="text-gold" />
+                        <h3 className="font-serif text-base font-bold text-ink">
+                          Top 10 High Swalath Done Members
+                        </h3>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs font-semibold">
+                          <thead>
+                            <tr className="border-b border-ink/10 text-[10px] font-bold uppercase text-muted">
+                              <th className="py-2">Rank</th>
+                              <th className="py-2">Participant</th>
+                              <th className="py-2">District</th>
+                              <th className="py-2 text-right">Total Swalath</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-ink/5">
+                            {topSwalathMembers.map((m, idx) => (
+                              <tr key={m.registrationId} className="hover:bg-cream/50">
+                                <td className="py-2">
+                                  <span className={`inline-flex size-6 items-center justify-center rounded-md text-[11px] font-bold ${
+                                    idx === 0
+                                      ? "bg-gold text-emerald"
+                                      : idx === 1
+                                      ? "bg-slate-300 text-slate-800"
+                                      : idx === 2
+                                      ? "bg-amber-600 text-white"
+                                      : "bg-cream text-muted"
+                                  }`}>
+                                    {idx + 1}
+                                  </span>
+                                </td>
+                                <td className="py-2">
+                                  <b className="text-ink">{m.name}</b>
+                                  <span className="ml-1.5 text-[10px] text-muted uppercase">
+                                    {m.registrationId}
+                                  </span>
+                                </td>
+                                <td className="py-2 text-muted">{m.district}</td>
+                                <td className="py-2 text-right font-serif text-sm font-black text-emerald">
+                                  {m.total.toLocaleString()}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {program.description && (
+                    <p className="mt-4 text-sm leading-6 text-muted">{program.description}</p>
+                  )}
+                  <div className="mt-4">
+                    <ProgramEdit program={program} />
+                  </div>
                 </div>
                 <span
-                  className={`size-2 rounded-full ${program.submission_form_url ? "bg-emerald" : "bg-amber-500"}`}
+                  className={`size-2 rounded-full ${
+                    isSwalath || program.submission_form_url
+                      ? "bg-emerald"
+                      : "bg-amber-500"
+                  }`}
                   title={
-                    program.submission_form_url
+                    isSwalath
+                      ? "In-app Swalath tracker configured"
+                      : program.submission_form_url
                       ? "Submission link configured"
                       : "Submission link missing"
                   }

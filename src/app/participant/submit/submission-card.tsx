@@ -2,6 +2,9 @@
 import { useState } from "react";
 import { ExternalLink, LoaderCircle } from "lucide-react";
 import { titleCase, visibleStatus } from "@/lib/program-status";
+import { isSwalathProgram } from "@/lib/program-rules";
+import { SwalathTracker } from "./swalath-tracker";
+
 type Selection = {
   id: string;
   program_id: string;
@@ -9,13 +12,19 @@ type Selection = {
   verification_status: string;
   form_opened_at: string | null;
   rejection_reason: string | null;
+  swalath_entries?: Record<string, number> | null;
+  swalath_total?: number | null;
   program: {
     code: string;
     name: string;
     global_status: string;
     submission_form_url: string | null;
+    is_swalath_campaign?: boolean | null;
+    campaign_start_date?: string | null;
+    campaign_end_date?: string | null;
   } | null;
 };
+
 export function SubmissionCard({
   selection: initial,
 }: {
@@ -25,6 +34,9 @@ export function SubmissionCard({
   const [confirm, setConfirm] = useState(false);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
+
+  const isSwalath = isSwalathProgram(s.program);
+
   async function openForm() {
     setPending(true);
     setMessage("");
@@ -45,6 +57,7 @@ export function SubmissionCard({
     }));
     window.open(result.url, "_blank", "noopener,noreferrer");
   }
+
   async function claim() {
     setPending(true);
     const res = await fetch(
@@ -64,6 +77,7 @@ export function SubmissionCard({
       rejection_reason: null,
     }));
   }
+
   const isOngoing = s.program?.global_status === "ongoing";
   const needsResubmission = ["rejected", "resubmission_required"].includes(
     s.verification_status,
@@ -72,18 +86,21 @@ export function SubmissionCard({
     s.verification_status,
   );
   const canOpenForm =
+    !isSwalath &&
     (isOngoing || needsResubmission) &&
     !awaitingOrVerified &&
     !s.form_opened_at &&
     (s.participant_progress_status !== "claimed_submitted" ||
       needsResubmission);
   const canClaim =
+    !isSwalath &&
     (isOngoing || needsResubmission) &&
     Boolean(s.form_opened_at) &&
     (!needsResubmission || s.participant_progress_status === "ongoing") &&
     ["not_submitted", "rejected", "resubmission_required"].includes(
       s.verification_status,
     );
+
   return (
     <article className="rounded-2xl border border-ink/8 bg-white p-5 shadow-sm">
       <div className="flex items-start justify-between gap-3">
@@ -99,6 +116,7 @@ export function SubmissionCard({
           {titleCase(s.program?.global_status ?? "not_started")}
         </span>
       </div>
+
       <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
         <div className="rounded-xl bg-cream p-3">
           <p className="text-[9px] font-bold uppercase tracking-wider text-muted">
@@ -120,6 +138,7 @@ export function SubmissionCard({
           </b>
         </div>
       </div>
+
       {["rejected", "resubmission_required"].includes(
         s.verification_status,
       ) && (
@@ -130,58 +149,85 @@ export function SubmissionCard({
           </p>
         </div>
       )}
-      {canOpenForm && (
+
+      {/* SWALATH CAMPAIGN IN-APP DAILY TRACKER */}
+      {isSwalath ? (
+        <SwalathTracker
+          programId={s.program_id}
+          startDate={s.program?.campaign_start_date}
+          endDate={s.program?.campaign_end_date}
+          initialEntries={s.swalath_entries}
+          initialTotal={s.swalath_total}
+          isOngoing={isOngoing || needsResubmission}
+          onSaved={(newTotal) => {
+            setS((old) => ({
+              ...old,
+              swalath_total: newTotal,
+              participant_progress_status: newTotal > 0 ? "claimed_submitted" : old.participant_progress_status,
+              verification_status: newTotal > 0 && old.verification_status !== "verified" ? "pending_verification" : old.verification_status,
+            }));
+          }}
+        />
+      ) : (
         <>
-          <div className="mt-5 rounded-xl bg-amber-50 p-3 text-xs font-semibold leading-5 text-amber-900">
-            A GOOGLE ACCOUNT MAY BE REQUIRED TO UPLOAD YOUR PROGRAMME ENTRY.
-            AFTER SUBMITTING THE GOOGLE FORM, RETURN TO THIS DASHBOARD AND MARK
-            THE PROGRAMME AS SUBMITTED.
-          </div>
-          <button
-            onClick={openForm}
-            disabled={pending || !s.program?.submission_form_url}
-            className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-emerald font-bold text-emerald disabled:opacity-40"
-          >
-            {pending ? (
-              <LoaderCircle className="animate-spin" size={18} />
-            ) : (
-              <ExternalLink size={18} />
-            )}
-            {needsResubmission ? "Open resubmission form" : "Open submission form"}
-          </button>
+          {canOpenForm && (
+            <>
+              <div className="mt-5 rounded-xl bg-amber-50 p-3 text-xs font-semibold leading-5 text-amber-900">
+                A GOOGLE ACCOUNT MAY BE REQUIRED TO UPLOAD YOUR PROGRAMME ENTRY.
+                AFTER SUBMITTING THE GOOGLE FORM, RETURN TO THIS DASHBOARD AND MARK
+                THE PROGRAMME AS SUBMITTED.
+              </div>
+              <button
+                onClick={openForm}
+                disabled={pending || !s.program?.submission_form_url}
+                className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-emerald font-bold text-emerald disabled:opacity-40"
+              >
+                {pending ? (
+                  <LoaderCircle className="animate-spin" size={18} />
+                ) : (
+                  <ExternalLink size={18} />
+                )}
+                {needsResubmission ? "Open resubmission form" : "Open submission form"}
+              </button>
+            </>
+          )}
+
+          {!isOngoing && !needsResubmission && (
+            <p className="mt-4 rounded-xl bg-cream p-3 text-xs font-semibold text-muted">
+              Submission is unavailable because this programme is {titleCase(s.program?.global_status ?? "not_started")}.
+            </p>
+          )}
+
+          {awaitingOrVerified && (
+            <p className="mt-4 rounded-xl bg-emerald/5 p-3 text-xs font-semibold text-emerald">
+              The submission form is hidden because this programme has already been submitted.
+            </p>
+          )}
+
+          {canClaim && (
+            <div className="mt-4 border-t border-ink/8 pt-4">
+              <label className="flex items-start gap-3 text-xs font-bold leading-5">
+                <input
+                  type="checkbox"
+                  checked={confirm}
+                  onChange={(e) => setConfirm(e.target.checked)}
+                  className="mt-1 accent-emerald"
+                />
+                I CONFIRM THAT I HAVE COMPLETED AND SUBMITTED THE GOOGLE FORM FOR
+                THIS PROGRAMME.
+              </label>
+              <button
+                onClick={claim}
+                disabled={!confirm || pending}
+                className="mt-3 min-h-11 w-full rounded-full bg-emerald px-4 text-xs font-bold text-white disabled:opacity-40"
+              >
+                Mark as submitted
+              </button>
+            </div>
+          )}
         </>
       )}
-      {!isOngoing && !needsResubmission && (
-        <p className="mt-4 rounded-xl bg-cream p-3 text-xs font-semibold text-muted">
-          Submission is unavailable because this programme is {titleCase(s.program?.global_status ?? "not_started")}.
-        </p>
-      )}
-      {awaitingOrVerified && (
-        <p className="mt-4 rounded-xl bg-emerald/5 p-3 text-xs font-semibold text-emerald">
-          The submission form is hidden because this programme has already been submitted.
-        </p>
-      )}
-      {canClaim && (
-        <div className="mt-4 border-t border-ink/8 pt-4">
-          <label className="flex items-start gap-3 text-xs font-bold leading-5">
-            <input
-              type="checkbox"
-              checked={confirm}
-              onChange={(e) => setConfirm(e.target.checked)}
-              className="mt-1 accent-emerald"
-            />
-            I CONFIRM THAT I HAVE COMPLETED AND SUBMITTED THE GOOGLE FORM FOR
-            THIS PROGRAMME.
-          </label>
-          <button
-            onClick={claim}
-            disabled={!confirm || pending}
-            className="mt-3 min-h-11 w-full rounded-full bg-emerald px-4 text-xs font-bold text-white disabled:opacity-40"
-          >
-            Mark as submitted
-          </button>
-        </div>
-      )}
+
       {message && (
         <p role="alert" className="mt-3 text-xs font-semibold text-red-700">
           {message}

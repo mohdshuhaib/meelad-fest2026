@@ -17,7 +17,18 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
   const {data:old}=await db.from("programs").select("*").eq("id",id).maybeSingle();
   if(!old)return NextResponse.json({message:"Programme not found."},{status:404});
   const input=parsed.data;
-  const update={description:input.description?.trim()||null,rules:input.rules?.trim()||null,submission_form_url:input.submission_form_url||null,registration_id_entry_key:input.registration_id_entry_key||null,full_name_entry_key:input.full_name_entry_key||null,global_status:input.global_status};
+  const isSwalath = input.is_swalath_campaign ?? (old.code === "FSS001" || (old.name && old.name.toUpperCase().includes("SWALATH")));
+  const update = {
+    description: input.description?.trim() || null,
+    rules: input.rules?.trim() || null,
+    submission_form_url: isSwalath ? null : (input.submission_form_url || null),
+    registration_id_entry_key: isSwalath ? null : (input.registration_id_entry_key || null),
+    full_name_entry_key: isSwalath ? null : (input.full_name_entry_key || null),
+    global_status: input.global_status,
+    is_swalath_campaign: isSwalath,
+    campaign_start_date: input.campaign_start_date || old.campaign_start_date || "2026-08-22",
+    campaign_end_date: input.campaign_end_date || old.campaign_end_date || "2026-09-05",
+  };
   const {data,error}=await db.from("programs").update(update).eq("id",id).select().single();
   if(error)return NextResponse.json({message:"Programme could not be updated."},{status:500});
   await db.from("audit_logs").insert({actor_user_id:staff.user.id,actor_role:"admin",action:"program.updated",entity_type:"program",entity_id:id,old_data:old,new_data:data});

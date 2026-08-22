@@ -29,7 +29,7 @@ export default async function ResultsPage({
     let query = db
       .from("participant_programs")
       .select(
-        "id, result_grade, result_position, result_points, participants!inner(registration_id, name, district, category)",
+        "id, result_grade, result_position, result_points, swalath_total, participants!inner(registration_id, name, district, category)",
       )
       .eq("program_id", selectedProgramId)
       .eq("verification_status", "verified");
