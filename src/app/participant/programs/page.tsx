@@ -2,6 +2,9 @@ import { requireParticipant } from "@/lib/participant-session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ProgramSelector } from "./program-selector";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 function formatIst(value: string | null | undefined) {
   if (!value) return null;
   return (

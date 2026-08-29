@@ -1,2 +1,37 @@
-import { requireParticipant } from "@/lib/participant-session"; import { ParticipantNav } from "./participant-nav";
-export default async function ParticipantLayout({children}:{children:React.ReactNode}){await requireParticipant();return <div className="min-h-screen bg-cream pb-28 text-ink md:pb-8"><header className="border-b border-white/10 bg-emerald px-5 py-4 text-white"><div className="mx-auto flex max-w-5xl items-center justify-between"><div><p className="font-serif text-lg font-semibold">AHLU SAADA</p><p className="text-[10px] font-bold tracking-[.24em] text-gold"> ALL KERALA ISLAMIC FEST</p></div><form action="/api/auth/participant/logout" method="post"><button className="rounded-full border border-white/25 px-4 py-2 text-xs font-bold">Logout</button></form></div></header><div className="mx-auto max-w-5xl md:grid md:grid-cols-[190px_1fr] md:gap-8 md:px-6 md:pt-8"><ParticipantNav/><main className="min-w-0 px-4 py-7 md:px-0 md:py-0">{children}</main></div></div>}
+import { requireParticipant } from "@/lib/participant-session";
+import { ParticipantNav } from "./participant-nav";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+export default async function ParticipantLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  await requireParticipant();
+  return (
+    <div className="min-h-screen bg-cream pb-28 text-ink md:pb-8">
+      <header className="border-b border-white/10 bg-emerald px-5 py-4 text-white">
+        <div className="mx-auto flex max-w-5xl items-center justify-between">
+          <div>
+            <p className="font-serif text-lg font-semibold">AHLU SAADA</p>
+            <p className="text-[10px] font-bold tracking-[.24em] text-gold">
+              {" "}
+              ALL KERALA ISLAMIC FEST
+            </p>
+          </div>
+          <form action="/api/auth/participant/logout" method="post">
+            <button className="rounded-full border border-white/25 px-4 py-2 text-xs font-bold transition hover:bg-white/10">
+              Logout
+            </button>
+          </form>
+        </div>
+      </header>
+      <div className="mx-auto max-w-5xl md:grid md:grid-cols-[190px_1fr] md:gap-8 md:px-6 md:pt-8">
+        <ParticipantNav />
+        <main className="min-w-0 px-4 py-7 md:px-0 md:py-0">{children}</main>
+      </div>
+    </div>
+  );
+}

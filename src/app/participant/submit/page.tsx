@@ -1,4 +1,11 @@
-import { MessageCircle, Users } from "lucide-react"; import { requireParticipant } from "@/lib/participant-session"; import { createAdminClient } from "@/lib/supabase/admin"; import { SubmissionCard } from "./submission-card";
+import { MessageCircle, Users } from "lucide-react";
+import { requireParticipant } from "@/lib/participant-session";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { SubmissionCard } from "./submission-card";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function Submit() {
   const p = await requireParticipant();
   const group = Array.isArray(p.groups) ? p.groups[0] : p.groups;
