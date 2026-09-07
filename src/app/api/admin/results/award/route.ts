@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/staff-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+
+const DEFAULT_POINT_RULES = {
+  normal: { grades: { A: 5, B: 3, C: 1 }, positions: { "1st": 5, "2nd": 3, "3rd": 1 } },
+  general: { grades: { A: 10, B: 8, C: 6 }, positions: { "1st": 5, "2nd": 3, "3rd": 1 } },
+};
 
 export async function POST(req: Request) {
   const adminProfile = await requireAdmin();
@@ -28,18 +34,19 @@ export async function POST(req: Request) {
   if (ppRes.error || !ppRes.data)
     return NextResponse.json({ message: "Participant programme not found." }, { status: 404 });
 
-  const pointRules = settingsRes.data?.point_rules;
+  const pointRules = settingsRes.data?.point_rules || DEFAULT_POINT_RULES;
   const participant = Array.isArray(ppRes.data.participants) ? ppRes.data.participants[0] : ppRes.data.participants;
   const cat = participant?.category;
   const categoryType = cat === "general" ? "general" : "normal";
 
   // 2. Calculate points
+  const activeRules = pointRules[categoryType] || DEFAULT_POINT_RULES[categoryType];
   let points = 0;
   if (result_grade && result_grade !== "None") {
-    points += pointRules[categoryType]?.grades[result_grade] || 0;
+    points += activeRules?.grades?.[result_grade] || 0;
   }
   if (result_position && result_position !== "None") {
-    points += pointRules[categoryType]?.positions[result_position] || 0;
+    points += activeRules?.positions?.[result_position] || 0;
   }
 
   // 3. Save
@@ -57,5 +64,9 @@ export async function POST(req: Request) {
   if (error)
     return NextResponse.json({ message: error.message }, { status: 500 });
   
+  revalidatePath("/results");
+  revalidatePath("/participant");
+
   return NextResponse.json({ success: true, points });
 }
+

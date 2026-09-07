@@ -4,14 +4,14 @@ import { ResultsClient, ResultsDataPayload, DistrictLeaderEntry, IndividualLeade
 import Link from "next/link";
 import { Trophy, ArrowLeft } from "lucide-react";
 
-// ISR: Cache statically and revalidate at most once every 60 seconds in the background
-// This handles 2,000+ concurrent visitors with virtually zero database/disk load.
-export const revalidate = 60;
+// Force 100% dynamic live rendering with zero caching so live results and database updates show immediately
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function ResultsPage() {
   const db = createAdminClient();
 
-  // Fetch only necessary lightweight fields
+  // Fetch all necessary active participants, awarded programs, and settings in parallel
   const [participantsRes, ppRes, programsRes, settingsRes] = await Promise.all([
     db
       .from("participants")
@@ -19,7 +19,7 @@ export default async function ResultsPage() {
       .eq("is_active", true),
     db
       .from("participant_programs")
-      .select("participant_id, program_id, result_points, verification_status"),
+      .select("participant_id, program_id, result_points, result_grade, result_position, verification_status"),
     db
       .from("programs")
       .select("id, category_eligibility, gender_eligibility"),
@@ -44,25 +44,68 @@ export default async function ResultsPage() {
     ).length;
   };
 
-  // Map participant_programs by participant_id
-  const participantProgramsMap = new Map<string, { totalPoints: number; count: number }>();
+  // Map participant_programs by participant_id to aggregate marks/points and awards
+  const participantProgramsMap = new Map<
+    string,
+    {
+      totalPoints: number;
+      count: number;
+      awardedCount: number;
+      bestGrade: string | null;
+      bestPosition: string | null;
+      awardsList: string[];
+    }
+  >();
+
   let totalPointsFest = 0;
   let totalSubmissionsFest = 0;
 
   for (const pp of rawPP) {
     const points = typeof pp.result_points === "number" ? pp.result_points : 0;
-    const existing = participantProgramsMap.get(pp.participant_id) || { totalPoints: 0, count: 0 };
+    const existing = participantProgramsMap.get(pp.participant_id) || {
+      totalPoints: 0,
+      count: 0,
+      awardedCount: 0,
+      bestGrade: null,
+      bestPosition: null,
+      awardsList: [],
+    };
+
     existing.totalPoints += points;
     existing.count += 1;
+
+    if (points > 0 || (pp.result_grade && pp.result_grade !== "None") || (pp.result_position && pp.result_position !== "None")) {
+      existing.awardedCount += 1;
+      if (pp.result_position && pp.result_position !== "None") {
+        existing.bestPosition = pp.result_position;
+        existing.awardsList.push(`${pp.result_position} Place`);
+      }
+      if (pp.result_grade && pp.result_grade !== "None") {
+        if (!existing.bestGrade || pp.result_grade < existing.bestGrade) {
+          existing.bestGrade = pp.result_grade;
+        }
+        existing.awardsList.push(`Grade ${pp.result_grade}`);
+      }
+    }
+
     participantProgramsMap.set(pp.participant_id, existing);
 
     totalPointsFest += points;
-    totalSubmissionsFest += 1;
+    if (pp.verification_status === "verified" || pp.result_points !== null) {
+      totalSubmissionsFest += 1;
+    }
   }
 
   // Pre-process all participants
   const processedParticipants = rawParticipants.map((p) => {
-    const progData = participantProgramsMap.get(p.id) || { totalPoints: 0, count: 0 };
+    const progData = participantProgramsMap.get(p.id) || {
+      totalPoints: 0,
+      count: 0,
+      awardedCount: 0,
+      bestGrade: null,
+      bestPosition: null,
+      awardsList: [],
+    };
     const eligibleCount = countEligiblePrograms(p.category, p.gender);
     const totalAvail = maxProgs ? Math.min(maxProgs, eligibleCount || maxProgs) : eligibleCount || 4;
 
@@ -75,6 +118,10 @@ export default async function ResultsPage() {
       category: p.category as "junior" | "senior" | "super_senior",
       totalPoints: progData.totalPoints,
       participatedCount: progData.count,
+      awardedCount: progData.awardedCount,
+      bestGrade: progData.bestGrade,
+      bestPosition: progData.bestPosition,
+      awardsList: progData.awardsList,
       totalAvailablePrograms: totalAvail,
     };
   });
@@ -90,9 +137,14 @@ export default async function ResultsPage() {
       return true;
     });
 
-    // Sort by points descending, then participated count, then name
+    // Sort by:
+    // 1. Points descending (highest score first)
+    // 2. Awarded programs count descending
+    // 3. Total participated programs descending
+    // 4. Name alphabetically
     filtered.sort((a, b) => {
       if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+      if (b.awardedCount !== a.awardedCount) return b.awardedCount - a.awardedCount;
       if (b.participatedCount !== a.participatedCount) return b.participatedCount - a.participatedCount;
       return a.name.localeCompare(b.name);
     });
@@ -162,9 +214,9 @@ export default async function ResultsPage() {
     });
   }
 
-  // Compile full pre-calculated payload
+  // Compile full real-time database calculated payload
   const overallDistricts = buildDistrictList("all", "all");
-  const leadingDistrict = overallDistricts[0]?.district || "—";
+  const leadingDistrict = overallDistricts.length > 0 && overallDistricts[0].totalPoints > 0 ? overallDistricts[0].district : overallDistricts[0]?.district || "—";
   const leadingDistrictPoints = overallDistricts[0]?.totalPoints || 0;
 
   const payload: ResultsDataPayload = {
@@ -223,7 +275,7 @@ export default async function ResultsPage() {
         <div className="mb-6 flex items-center justify-between">
           <Link
             href="/"
-            className="group flex items-center gap-2 rounded-xl bg-white/80 px-4 py-2 text-xs font-bold text-ink shadow-sm ring-1 ring-ink/10 backdrop-blur transition-all hover:bg-white hover:text-emerald"
+            className="group flex items-center gap-2 rounded-xl bg-white/80 px-4 py-2 text-xs font-bold text-ink shadow-sm ring-1 ring-ink/10 backdrop-blur transition-all hover:bg-white hover:text-emerald cursor-pointer"
           >
             <ArrowLeft size={16} className="transition-transform group-hover:-translate-x-1" />
             Home
@@ -232,7 +284,7 @@ export default async function ResultsPage() {
           <div className="flex items-center gap-2">
             <span className="flex size-2 rounded-full bg-emerald animate-ping" />
             <span className="text-[11px] font-bold uppercase tracking-wider text-emerald">
-              Live Fest Standings
+              Live Database Results
             </span>
           </div>
         </div>
