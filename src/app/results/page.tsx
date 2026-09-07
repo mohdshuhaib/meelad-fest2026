@@ -8,32 +8,71 @@ import { Trophy, ArrowLeft } from "lucide-react";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+// Helper to fetch all rows across all pages from Supabase (bypasses PostgREST 1,000 row default limit)
+async function fetchAllRows<T>(
+  fetcher: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: any }>
+): Promise<T[]> {
+  const PAGE_SIZE = 1000;
+  let allRows: T[] = [];
+  let from = 0;
+  while (true) {
+    const to = from + PAGE_SIZE - 1;
+    const { data, error } = await fetcher(from, to);
+    if (error || !data || data.length === 0) break;
+    allRows = allRows.concat(data as T[]);
+    if (data.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+  return allRows;
+}
+
 export default async function ResultsPage() {
   const db = createAdminClient();
 
-  // Fetch all necessary active participants, awarded programs, and settings in parallel
-  const [participantsRes, ppRes, programsRes, settingsRes] = await Promise.all([
-    db
-      .from("participants")
-      .select("id, registration_id, name, district, gender, category")
-      .eq("is_active", true),
-    db
-      .from("participant_programs")
-      .select("participant_id, program_id, result_points, result_grade, result_position, verification_status"),
+  // Fetch all active participants, all participant_programs across all pages, programs, and settings in parallel
+  const [rawParticipants, rawPP, programsRes, settingsRes] = await Promise.all([
+    fetchAllRows<{
+      id: string;
+      registration_id: string;
+      name: string;
+      district: string;
+      gender: string;
+      category: string;
+    }>(async (from, to) =>
+      await db
+        .from("participants")
+        .select("id, registration_id, name, district, gender, category")
+        .eq("is_active", true)
+        .is("deleted_at", null)
+        .range(from, to)
+    ),
+    fetchAllRows<{
+      id: string;
+      participant_id: string;
+      program_id: string;
+      result_points: number | null;
+      result_grade: string | null;
+      result_position: string | null;
+      verification_status: string;
+    }>(async (from, to) =>
+      await db
+        .from("participant_programs")
+        .select("id, participant_id, program_id, result_points, result_grade, result_position, verification_status")
+        .range(from, to)
+    ),
     db
       .from("programs")
       .select("id, category_eligibility, gender_eligibility"),
     db
       .from("app_settings")
-      .select("maximum_programs_per_participant")
+      .select("maximum_programs_per_participant, point_rules")
       .eq("id", true)
       .maybeSingle(),
   ]);
 
-  const rawParticipants = participantsRes.data || [];
-  const rawPP = ppRes.data || [];
   const rawPrograms = programsRes.data || [];
   const maxProgs = settingsRes.data?.maximum_programs_per_participant ?? 4;
+  const pointRules = settingsRes.data?.point_rules;
 
   // Build program lookup for eligibility counts
   const countEligiblePrograms = (category: string, gender: string) => {
@@ -61,7 +100,19 @@ export default async function ResultsPage() {
   let totalSubmissionsFest = 0;
 
   for (const pp of rawPP) {
-    const points = typeof pp.result_points === "number" ? pp.result_points : 0;
+    let points = typeof pp.result_points === "number" ? pp.result_points : 0;
+    const hasGrade = Boolean(pp.result_grade && pp.result_grade !== "None");
+    const hasPosition = Boolean(pp.result_position && pp.result_position !== "None");
+
+    // Fallback point calculation if result_points is 0 but grade or position was awarded
+    if (points === 0 && (hasGrade || hasPosition)) {
+      const g = pp.result_grade;
+      const p = pp.result_position;
+      const gPts = g === "A" ? 5 : g === "B" ? 3 : g === "C" ? 1 : 0;
+      const pPts = p === "1st" ? 5 : p === "2nd" ? 3 : p === "3rd" ? 1 : 0;
+      points = gPts + pPts;
+    }
+
     const existing = participantProgramsMap.get(pp.participant_id) || {
       totalPoints: 0,
       count: 0,
@@ -74,13 +125,13 @@ export default async function ResultsPage() {
     existing.totalPoints += points;
     existing.count += 1;
 
-    if (points > 0 || (pp.result_grade && pp.result_grade !== "None") || (pp.result_position && pp.result_position !== "None")) {
+    if (points > 0 || hasGrade || hasPosition) {
       existing.awardedCount += 1;
-      if (pp.result_position && pp.result_position !== "None") {
+      if (hasPosition && pp.result_position) {
         existing.bestPosition = pp.result_position;
         existing.awardsList.push(`${pp.result_position} Place`);
       }
-      if (pp.result_grade && pp.result_grade !== "None") {
+      if (hasGrade && pp.result_grade) {
         if (!existing.bestGrade || pp.result_grade < existing.bestGrade) {
           existing.bestGrade = pp.result_grade;
         }
@@ -91,7 +142,7 @@ export default async function ResultsPage() {
     participantProgramsMap.set(pp.participant_id, existing);
 
     totalPointsFest += points;
-    if (pp.verification_status === "verified" || pp.result_points !== null) {
+    if (pp.verification_status === "verified" || pp.result_points !== null || hasGrade || hasPosition) {
       totalSubmissionsFest += 1;
     }
   }

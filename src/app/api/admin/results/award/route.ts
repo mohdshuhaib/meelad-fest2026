@@ -21,32 +21,33 @@ export async function POST(req: Request) {
 
   const admin = createAdminClient();
   
-  // 1. Get the current point rules and participant category
+  // 1. Get the current point rules and program category eligibility
   const [settingsRes, ppRes] = await Promise.all([
-    admin.from("app_settings").select("point_rules").eq("id", true).single(),
+    admin.from("app_settings").select("point_rules").eq("id", true).maybeSingle(),
     admin
       .from("participant_programs")
-      .select("participants(category)")
+      .select("id, program_id, programs(category_eligibility), participants(category)")
       .eq("id", participant_program_id)
-      .single()
+      .maybeSingle()
   ]);
 
   if (ppRes.error || !ppRes.data)
     return NextResponse.json({ message: "Participant programme not found." }, { status: 404 });
 
   const pointRules = settingsRes.data?.point_rules || DEFAULT_POINT_RULES;
-  const participant = Array.isArray(ppRes.data.participants) ? ppRes.data.participants[0] : ppRes.data.participants;
-  const cat = participant?.category;
-  const categoryType = cat === "general" ? "general" : "normal";
+  const program = Array.isArray(ppRes.data.programs) ? ppRes.data.programs[0] : ppRes.data.programs;
+  const categoryType = program?.category_eligibility === "general" ? "general" : "normal";
 
   // 2. Calculate points
-  const activeRules = pointRules[categoryType] || DEFAULT_POINT_RULES[categoryType];
+  const activeRules = pointRules?.[categoryType] || DEFAULT_POINT_RULES[categoryType];
   let points = 0;
   if (result_grade && result_grade !== "None") {
-    points += activeRules?.grades?.[result_grade] || 0;
+    const gVal = activeRules?.grades?.[result_grade];
+    points += typeof gVal === "number" ? gVal : (DEFAULT_POINT_RULES[categoryType].grades as Record<string, number>)[result_grade] || 0;
   }
   if (result_position && result_position !== "None") {
-    points += activeRules?.positions?.[result_position] || 0;
+    const pVal = activeRules?.positions?.[result_position];
+    points += typeof pVal === "number" ? pVal : (DEFAULT_POINT_RULES[categoryType].positions as Record<string, number>)[result_position] || 0;
   }
 
   // 3. Save
@@ -65,8 +66,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: error.message }, { status: 500 });
   
   revalidatePath("/results");
+  revalidatePath("/admin/results");
   revalidatePath("/participant");
 
   return NextResponse.json({ success: true, points });
 }
-

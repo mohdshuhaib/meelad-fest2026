@@ -38,7 +38,7 @@ export default async function ResultsPage({
       query = query.ilike("participants.registration_id", `%${searchQuery}%`);
     }
 
-    const { data } = await query;
+    const { data } = await query.range(0, 4999);
     participants = data || [];
   }
 
