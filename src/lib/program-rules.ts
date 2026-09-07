@@ -57,6 +57,22 @@ export function isSwalathProgram(program?: {
   return code === "FSS001" || code.startsWith("SWALATH") || name.includes("SWALATH");
 }
 
+export function isBookTestProgram(program?: {
+  code?: string | null;
+  name?: string | null;
+} | null): boolean {
+  if (!program) return false;
+  const code = (program.code || "").toUpperCase().trim();
+  const name = (program.name || "").toUpperCase().trim();
+  return (
+    code === "FS001" ||
+    code.startsWith("FS001") ||
+    code === "FSS001_BOOK" ||
+    name.includes("BOOK TEST") ||
+    name.includes("BOOKTEST")
+  );
+}
+
 export function generateCampaignDateList(
   startDate?: string | null,
   endDate?: string | null

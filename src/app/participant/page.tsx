@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { ChevronDown, Download, MapPin, ArrowRight, Sparkles, CheckCircle2, Clock, AlertCircle } from "lucide-react";
+import { ChevronDown, Download, MapPin, ArrowRight, Sparkles, CheckCircle2, Clock, AlertCircle, BookOpen } from "lucide-react";
 import { requireParticipant } from "@/lib/participant-session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAgeAndCategory } from "@/lib/registration";
 import { titleCase, visibleStatus } from "@/lib/program-status";
-import { isSwalathProgram, formatDateDMY } from "@/lib/program-rules";
+import { isSwalathProgram, isBookTestProgram, formatDateDMY } from "@/lib/program-rules";
+import { BookReaderModal } from "./book-reader-modal";
 
 // Force dynamic rendering with 0 revalidation so participant data and programme statuses are always live
 export const dynamic = "force-dynamic";
@@ -95,6 +96,7 @@ export default async function ParticipantHome() {
               const isOngoing = globalStatus === "ongoing";
               const isClosed = globalStatus === "closed";
               const isSwalath = isSwalathProgram(pr);
+              const isBookTest = isBookTestProgram(pr);
 
               return (
                 <article
@@ -114,6 +116,11 @@ export default async function ParticipantHome() {
                           {isSwalath && (
                             <span className="inline-flex items-center gap-1 rounded-full bg-gold/20 px-2 py-0.5 text-[9px] font-black uppercase text-emerald">
                               <Sparkles size={10} /> Daily Swalath Campaign
+                            </span>
+                          )}
+                          {isBookTest && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-gold/20 px-2 py-0.5 text-[9px] font-black uppercase text-emerald">
+                              <BookOpen size={10} /> Book Test Programme
                             </span>
                           )}
                         </div>
@@ -179,8 +186,18 @@ export default async function ParticipantHome() {
                       )}
                     </div>
 
-                    {/* ACTION LINK */}
-                    <div>
+                    {/* ACTION LINKS & BOOK READER */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/* SECURE IN-APP BOOK READER BUTTON FOR BOOK TEST */}
+                      {isBookTest && (
+                        <BookReaderModal
+                          programCode={pr?.code || "FS001"}
+                          programName={pr?.name || "Book Test"}
+                          participantName={p.name}
+                          registrationId={p.registration_id}
+                        />
+                      )}
+
                       {isOngoing ? (
                         <Link
                           href="/participant/submit"

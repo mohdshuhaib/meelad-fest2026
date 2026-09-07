@@ -83,7 +83,13 @@ export default async function Submit() {
       <div className="mt-5 space-y-4">
         {selections?.map((s) => {
           const program = Array.isArray(s.programs) ? s.programs[0] : s.programs;
-          return <SubmissionCard key={s.id} selection={{ ...s, program }} />;
+          return (
+            <SubmissionCard
+              key={s.id}
+              selection={{ ...s, program }}
+              participant={{ name: p.name, registration_id: p.registration_id }}
+            />
+          );
         })}
         {!selections?.length && (
           <p className="rounded-2xl border border-dashed p-8 text-center text-sm text-muted">

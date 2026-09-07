@@ -1,9 +1,10 @@
 "use client";
 import { useState } from "react";
-import { ExternalLink, LoaderCircle } from "lucide-react";
+import { ExternalLink, LoaderCircle, BookOpen } from "lucide-react";
 import { titleCase, visibleStatus } from "@/lib/program-status";
-import { isSwalathProgram } from "@/lib/program-rules";
+import { isSwalathProgram, isBookTestProgram } from "@/lib/program-rules";
 import { SwalathTracker } from "./swalath-tracker";
+import { BookReaderModal } from "../book-reader-modal";
 
 type Selection = {
   id: string;
@@ -27,8 +28,10 @@ type Selection = {
 
 export function SubmissionCard({
   selection: initial,
+  participant,
 }: {
   selection: Selection;
+  participant?: { name: string; registration_id: string };
 }) {
   const [s, setS] = useState(initial);
   const [confirm, setConfirm] = useState(false);
@@ -36,6 +39,7 @@ export function SubmissionCard({
   const [message, setMessage] = useState("");
 
   const isSwalath = isSwalathProgram(s.program);
+  const isBookTest = isBookTestProgram(s.program);
 
   async function openForm() {
     setPending(true);
@@ -111,6 +115,16 @@ export function SubmissionCard({
           <h3 className="mt-1 font-serif text-xl font-semibold">
             {s.program?.name}
           </h3>
+          {isBookTest && participant && (
+            <div className="mt-2">
+              <BookReaderModal
+                programCode={s.program?.code || "FS001"}
+                programName={s.program?.name || "Book Test"}
+                participantName={participant.name}
+                registrationId={participant.registration_id}
+              />
+            </div>
+          )}
         </div>
         <span className="rounded-full bg-cream px-3 py-1 text-[10px] font-bold uppercase">
           {titleCase(s.program?.global_status ?? "not_started")}
