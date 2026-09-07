@@ -13,9 +13,9 @@ import {
   ChevronRight,
   ZoomIn,
   ZoomOut,
-  RotateCw,
   Layers,
   FileText,
+  Sparkles,
 } from "lucide-react";
 
 interface BookReaderModalProps {
@@ -31,6 +31,54 @@ declare global {
   }
 }
 
+// --------------------------------------------------------------------------
+// IndexedDB PDF Cache: Caches PDF ArrayBuffer locally in the participant's browser
+// so subsequent opens load instantly without re-downloading.
+// --------------------------------------------------------------------------
+const DB_NAME = "FestBookReaderCache";
+const STORE_NAME = "pdf_books";
+
+function openCacheDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    if (typeof window === "undefined" || !window.indexedDB) {
+      return reject(new Error("IndexedDB not supported"));
+    }
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME);
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function getCachedBookBuffer(key: string): Promise<ArrayBuffer | null> {
+  try {
+    const db = await openCacheDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE_NAME, "readonly");
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.get(key);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function saveCachedBookBuffer(key: string, buffer: ArrayBuffer): Promise<void> {
+  try {
+    const db = await openCacheDB();
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    const store = tx.objectStore(STORE_NAME);
+    store.put(buffer, key);
+  } catch {}
+}
+
 export function BookReaderModal({
   programCode,
   programName,
@@ -41,18 +89,17 @@ export function BookReaderModal({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingProgress, setLoadingProgress] = useState("Initializing secure viewer...");
+  const [isCached, setIsCached] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // PDF Document State
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [numPages, setNumPages] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [scale, setScale] = useState<number>(1.2);
-  const [rotation, setRotation] = useState<number>(0);
+  const [scale, setScale] = useState<number>(1.0);
   const [viewMode, setViewMode] = useState<"single" | "scroll">("scroll");
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const renderTaskRef = useRef<any>(null);
 
   const pdfUrl = `/api/participant/book-reader/${programCode}`;
@@ -91,7 +138,7 @@ export function BookReaderModal({
     });
   }, []);
 
-  // Initialize and load PDF document when modal opens
+  // Initialize and load PDF document with IndexedDB caching
   useEffect(() => {
     if (!isOpen) {
       setPdfDoc(null);
@@ -107,35 +154,70 @@ export function BookReaderModal({
     async function initPdf() {
       setLoading(true);
       setErrorMsg(null);
-      setLoadingProgress("Loading secure reader engine...");
+      setLoadingProgress("Starting secure reader...");
 
-      // 1. Load PDF.js library
+      // 1. Ensure PDF.js engine is loaded
       const ready = await loadPdfJsScript();
       if (!isMounted) return;
       if (!ready || !window.pdfjsLib) {
-        setErrorMsg("Could not initialize the online reader engine. Please check your internet connection.");
+        setErrorMsg("Could not initialize the book reader. Please check your internet connection.");
         setLoading(false);
         return;
       }
 
-      // 2. Fetch and parse PDF document
-      setLoadingProgress("Fetching book content...");
+      // 2. Check IndexedDB browser cache for fast instant opening
+      const cacheKey = `book_${programCode.toUpperCase()}`;
+      const cachedBuffer = await getCachedBookBuffer(cacheKey);
+
+      if (cachedBuffer && isMounted) {
+        setIsCached(true);
+        setLoadingProgress("Opening saved book...");
+        try {
+          const doc = await window.pdfjsLib.getDocument({
+            data: cachedBuffer,
+          }).promise;
+
+          if (!isMounted) return;
+          setPdfDoc(doc);
+          setNumPages(doc.numPages);
+          setCurrentPage(1);
+          setLoading(false);
+          return;
+        } catch (cacheErr) {
+          console.warn("Cached PDF corrupted or invalid, fetching fresh copy:", cacheErr);
+        }
+      }
+
+      // 3. If not in cache, fetch fresh from server API
+      setLoadingProgress("Downloading book for offline viewing...");
       try {
-        const loadingTask = window.pdfjsLib.getDocument({
-          url: pdfUrl,
-          withCredentials: true,
-        });
-
-        loadingTask.onProgress = (progressData: { loaded: number; total: number }) => {
-          if (progressData.total > 0) {
-            const percent = Math.round((progressData.loaded / progressData.total) * 100);
-            setLoadingProgress(`Loading book... ${percent}%`);
+        const response = await fetch(pdfUrl, { credentials: "include" });
+        if (!response.ok) {
+          if (response.status === 404) {
+            setErrorMsg(
+              "Book PDF is not found on the server. Please ensure 'fs001-book.pdf' is placed in 'private_assets/books/'."
+            );
+          } else if (response.status === 403) {
+            setErrorMsg("Access Restricted: Only participants registered for this Book Test programme can view this book.");
+          } else {
+            setErrorMsg("Unable to load book. Please try again.");
           }
-        };
+          setLoading(false);
+          return;
+        }
 
-        const doc = await loadingTask.promise;
+        const arrayBuffer = await response.arrayBuffer();
         if (!isMounted) return;
 
+        // Save to IndexedDB cache for next instant opens
+        saveCachedBookBuffer(cacheKey, arrayBuffer);
+        setIsCached(true);
+
+        const doc = await window.pdfjsLib.getDocument({
+          data: arrayBuffer,
+        }).promise;
+
+        if (!isMounted) return;
         setPdfDoc(doc);
         setNumPages(doc.numPages);
         setCurrentPage(1);
@@ -143,21 +225,13 @@ export function BookReaderModal({
       } catch (err: any) {
         if (!isMounted) return;
         setLoading(false);
-        if (err?.status === 404 || err?.message?.includes("404")) {
-          setErrorMsg(
-            "Book PDF is not found on the server. Please ensure 'fs001-book.pdf' is uploaded to 'private_assets/books/'."
-          );
-        } else if (err?.status === 403 || err?.message?.includes("403")) {
-          setErrorMsg("Access Restricted: Only participants registered for this Book Test programme can view this book.");
-        } else {
-          setErrorMsg("Could not load book file. Please ensure 'fs001-book.pdf' is placed in 'private_assets/books/'.");
-        }
+        setErrorMsg("Could not load book file. Please ensure 'fs001-book.pdf' is in 'private_assets/books/'.");
       }
     }
 
     initPdf();
 
-    // Security event listeners: block shortcuts and right-click
+    // Keyboard & Context Menu Security Protections
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && ["s", "p", "c", "u"].includes(e.key.toLowerCase())) {
         e.preventDefault();
@@ -186,15 +260,15 @@ export function BookReaderModal({
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("contextmenu", handleContextMenu);
     };
-  }, [isOpen, pdfUrl, loadPdfJsScript, numPages]);
+  }, [isOpen, pdfUrl, programCode, loadPdfJsScript, numPages]);
 
-  // Render single page onto canvas
+  // Render single page onto canvas (Single Page Mode)
   useEffect(() => {
     if (!pdfDoc || !canvasRef.current || viewMode !== "single") return;
 
     let isCancelled = false;
 
-    async function renderPage() {
+    async function renderSinglePage() {
       if (renderTaskRef.current) {
         try {
           await renderTaskRef.current.cancel();
@@ -205,23 +279,28 @@ export function BookReaderModal({
         const page = await pdfDoc.getPage(currentPage);
         if (isCancelled || !canvasRef.current) return;
 
-        const viewport = page.getViewport({ scale, rotation });
+        const viewport = page.getViewport({ scale: 1.0 });
         const canvas = canvasRef.current;
         const context = canvas.getContext("2d");
         if (!context) return;
 
-        // Support high-DPI (Retina / Mobile OLED) screens
+        // Exact aspect-ratio aware sizing
         const dpr = window.devicePixelRatio || 1;
-        canvas.width = Math.floor(viewport.width * dpr);
-        canvas.height = Math.floor(viewport.height * dpr);
-        canvas.style.width = `${Math.floor(viewport.width)}px`;
-        canvas.style.height = `${Math.floor(viewport.height)}px`;
+        const renderScale = (scale || 1.0) * dpr;
+        const scaledViewport = page.getViewport({ scale: renderScale });
 
-        context.setTransform(dpr, 0, 0, dpr, 0, 0);
+        canvas.width = Math.floor(scaledViewport.width);
+        canvas.height = Math.floor(scaledViewport.height);
+
+        // Styling with exact natural aspect ratio
+        canvas.style.width = "100%";
+        canvas.style.maxWidth = `${Math.floor(viewport.width * scale)}px`;
+        canvas.style.height = "auto";
+        canvas.style.aspectRatio = `${viewport.width} / ${viewport.height}`;
 
         const renderContext = {
           canvasContext: context,
-          viewport: viewport,
+          viewport: scaledViewport,
         };
 
         const renderTask = page.render(renderContext);
@@ -234,26 +313,12 @@ export function BookReaderModal({
       }
     }
 
-    renderPage();
+    renderSinglePage();
 
     return () => {
       isCancelled = true;
     };
-  }, [pdfDoc, currentPage, scale, rotation, viewMode]);
-
-  // Handle mobile / desktop responsive auto-scale on open
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const isMobile = window.innerWidth < 768;
-      if (isMobile) {
-        setScale(0.95);
-        setViewMode("scroll");
-      } else {
-        setScale(1.2);
-        setViewMode("scroll");
-      }
-    }
-  }, [isOpen]);
+  }, [pdfDoc, currentPage, scale, viewMode]);
 
   return (
     <>
@@ -305,6 +370,11 @@ export function BookReaderModal({
                     <span className="truncate text-[10px] font-bold text-emerald-300">
                       • {registrationId}
                     </span>
+                    {isCached && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald/20 px-2 py-0.5 text-[9px] font-bold text-emerald-200">
+                        <Sparkles size={10} /> Fast Offline Ready
+                      </span>
+                    )}
                   </div>
                   <h2 className="truncate font-serif text-sm font-bold text-white sm:text-base">
                     {programName}
@@ -319,7 +389,7 @@ export function BookReaderModal({
                   type="button"
                   onClick={() => setIsFullscreen(!isFullscreen)}
                   title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
-                  className="grid size-9 place-items-center rounded-xl border border-white/15 bg-white/5 text-white/80 transition hover:bg-white/15 hover:text-white"
+                  className="grid size-9 place-items-center rounded-xl border border-white/15 bg-white/5 text-white/80 transition hover:bg-white/15 hover:text-white cursor-pointer"
                 >
                   {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
                 </button>
@@ -329,7 +399,7 @@ export function BookReaderModal({
                   type="button"
                   onClick={() => setIsOpen(false)}
                   title="Close Reader"
-                  className="grid size-9 place-items-center rounded-xl bg-red-500/20 text-red-300 transition hover:bg-red-500 hover:text-white"
+                  className="grid size-9 place-items-center rounded-xl bg-red-500/20 text-red-300 transition hover:bg-red-500 hover:text-white cursor-pointer"
                 >
                   <X size={18} />
                 </button>
@@ -346,7 +416,7 @@ export function BookReaderModal({
                       type="button"
                       disabled={currentPage <= 1}
                       onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                      className="grid size-8 place-items-center rounded-lg bg-white/10 text-white disabled:opacity-30 hover:bg-white/20"
+                      className="grid size-8 place-items-center rounded-lg bg-white/10 text-white disabled:opacity-30 hover:bg-white/20 cursor-pointer"
                     >
                       <ChevronLeft size={16} />
                     </button>
@@ -357,7 +427,7 @@ export function BookReaderModal({
                       type="button"
                       disabled={currentPage >= numPages}
                       onClick={() => setCurrentPage((p) => Math.min(numPages, p + 1))}
-                      className="grid size-8 place-items-center rounded-lg bg-white/10 text-white disabled:opacity-30 hover:bg-white/20"
+                      className="grid size-8 place-items-center rounded-lg bg-white/10 text-white disabled:opacity-30 hover:bg-white/20 cursor-pointer"
                     >
                       <ChevronRight size={16} />
                     </button>
@@ -375,7 +445,7 @@ export function BookReaderModal({
                   <button
                     type="button"
                     onClick={() => setViewMode(viewMode === "scroll" ? "single" : "scroll")}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-2.5 py-1 text-[11px] font-bold text-white/90 hover:bg-white/15"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-2.5 py-1 text-[11px] font-bold text-white/90 hover:bg-white/15 cursor-pointer"
                   >
                     <Layers size={13} />
                     <span className="hidden sm:inline">
@@ -390,7 +460,7 @@ export function BookReaderModal({
                       disabled={scale <= 0.6}
                       onClick={() => setScale((s) => Math.max(0.6, Number((s - 0.15).toFixed(2))))}
                       title="Zoom Out"
-                      className="grid size-7 place-items-center rounded text-white/90 hover:bg-white/15 disabled:opacity-30"
+                      className="grid size-7 place-items-center rounded text-white/90 hover:bg-white/15 disabled:opacity-30 cursor-pointer"
                     >
                       <ZoomOut size={14} />
                     </button>
@@ -402,7 +472,7 @@ export function BookReaderModal({
                       disabled={scale >= 2.5}
                       onClick={() => setScale((s) => Math.min(2.5, Number((s + 0.15).toFixed(2))))}
                       title="Zoom In"
-                      className="grid size-7 place-items-center rounded text-white/90 hover:bg-white/15 disabled:opacity-30"
+                      className="grid size-7 place-items-center rounded text-white/90 hover:bg-white/15 disabled:opacity-30 cursor-pointer"
                     >
                       <ZoomIn size={14} />
                     </button>
@@ -423,10 +493,7 @@ export function BookReaderModal({
             </div>
 
             {/* Viewer Content Area */}
-            <div
-              ref={scrollContainerRef}
-              className="relative flex-1 overflow-auto bg-[#141b18] p-3 select-none flex justify-center sm:p-6"
-            >
+            <div className="relative flex-1 overflow-auto bg-[#141b18] p-3 select-none flex justify-center sm:p-6">
               {loading && (
                 <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[#0d2822]/95 text-white">
                   <LoaderCircle size={36} className="animate-spin text-gold" />
@@ -450,7 +517,7 @@ export function BookReaderModal({
                   <button
                     type="button"
                     onClick={() => setIsOpen(false)}
-                    className="rounded-full bg-white/10 px-6 py-2.5 text-xs font-bold text-white hover:bg-white/20"
+                    className="rounded-full bg-white/10 px-6 py-2.5 text-xs font-bold text-white hover:bg-white/20 cursor-pointer"
                   >
                     Close Reader
                   </button>
@@ -458,10 +525,10 @@ export function BookReaderModal({
               ) : pdfDoc ? (
                 viewMode === "single" ? (
                   // SINGLE PAGE MODE
-                  <div className="flex flex-col items-center justify-start py-2">
+                  <div className="flex flex-col items-center justify-start py-2 w-full max-w-full">
                     <canvas
                       ref={canvasRef}
-                      className="rounded-lg shadow-2xl bg-white max-w-full"
+                      className="rounded-lg shadow-2xl bg-white"
                       style={{
                         pointerEvents: "auto",
                         userSelect: "none",
@@ -469,11 +536,10 @@ export function BookReaderModal({
                     />
                   </div>
                 ) : (
-                  // CONTINUOUS SCROLL MODE (All pages rendered onto canvases sequentially)
+                  // CONTINUOUS SCROLL MODE (All pages rendered with exact aspect ratio)
                   <ContinuousPagesViewer
                     pdfDoc={pdfDoc}
                     scale={scale}
-                    rotation={rotation}
                     numPages={numPages}
                   />
                 )
@@ -490,25 +556,22 @@ export function BookReaderModal({
 function ContinuousPagesViewer({
   pdfDoc,
   scale,
-  rotation,
   numPages,
 }: {
   pdfDoc: any;
   scale: number;
-  rotation: number;
   numPages: number;
 }) {
   const pageNumbers = Array.from({ length: numPages }, (_, i) => i + 1);
 
   return (
-    <div className="flex flex-col items-center gap-6 py-2 max-w-full">
+    <div className="flex flex-col items-center gap-6 py-2 w-full max-w-full">
       {pageNumbers.map((pageNum) => (
         <SinglePageCanvas
           key={pageNum}
           pdfDoc={pdfDoc}
           pageNum={pageNum}
           scale={scale}
-          rotation={rotation}
         />
       ))}
     </div>
@@ -519,15 +582,12 @@ function SinglePageCanvas({
   pdfDoc,
   pageNum,
   scale,
-  rotation,
 }: {
   pdfDoc: any;
   pageNum: number;
   scale: number;
-  rotation: number;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [rendered, setRendered] = useState(false);
 
   useEffect(() => {
     let isCancelled = false;
@@ -539,26 +599,31 @@ function SinglePageCanvas({
         const page = await pdfDoc.getPage(pageNum);
         if (isCancelled || !canvasRef.current) return;
 
-        const viewport = page.getViewport({ scale, rotation });
+        const baseViewport = page.getViewport({ scale: 1.0 });
         const canvas = canvasRef.current;
         const context = canvas.getContext("2d");
         if (!context) return;
 
+        // Device pixel ratio for sharp rendering on retina/mobile
         const dpr = window.devicePixelRatio || 1;
-        canvas.width = Math.floor(viewport.width * dpr);
-        canvas.height = Math.floor(viewport.height * dpr);
-        canvas.style.width = `${Math.floor(viewport.width)}px`;
-        canvas.style.height = `${Math.floor(viewport.height)}px`;
+        const renderScale = (scale || 1.0) * dpr;
+        const scaledViewport = page.getViewport({ scale: renderScale });
 
-        context.setTransform(dpr, 0, 0, dpr, 0, 0);
+        canvas.width = Math.floor(scaledViewport.width);
+        canvas.height = Math.floor(scaledViewport.height);
+
+        // Strict Aspect Ratio Preservation: width scales, height is auto, aspect ratio is fixed!
+        canvas.style.width = "100%";
+        canvas.style.maxWidth = `${Math.floor(baseViewport.width * scale)}px`;
+        canvas.style.height = "auto";
+        canvas.style.aspectRatio = `${baseViewport.width} / ${baseViewport.height}`;
 
         const renderContext = {
           canvasContext: context,
-          viewport: viewport,
+          viewport: scaledViewport,
         };
 
         await page.render(renderContext).promise;
-        if (!isCancelled) setRendered(true);
       } catch (err) {
         console.error(`Page ${pageNum} render error:`, err);
       }
@@ -569,16 +634,16 @@ function SinglePageCanvas({
     return () => {
       isCancelled = true;
     };
-  }, [pdfDoc, pageNum, scale, rotation]);
+  }, [pdfDoc, pageNum, scale]);
 
   return (
-    <div className="relative flex flex-col items-center max-w-full">
+    <div className="relative flex flex-col items-center w-full max-w-full">
       <div className="mb-1 text-[10px] font-bold text-white/50">
         Page {pageNum}
       </div>
       <canvas
         ref={canvasRef}
-        className="rounded-lg shadow-2xl bg-white max-w-full"
+        className="rounded-lg shadow-2xl bg-white"
         style={{
           pointerEvents: "auto",
           userSelect: "none",

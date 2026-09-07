@@ -84,7 +84,7 @@ export async function GET(
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `inline; filename="fs001-book.pdf"`,
-        "Cache-Control": "private, no-store, no-cache, must-revalidate, max-age=0",
+        "Cache-Control": "private, max-age=86400, stale-while-revalidate=604800",
         "X-Content-Type-Options": "nosniff",
         "X-Frame-Options": "SAMEORIGIN",
         "Content-Security-Policy": "frame-ancestors 'self'",
