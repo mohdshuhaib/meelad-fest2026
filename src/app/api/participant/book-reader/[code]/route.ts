@@ -86,6 +86,9 @@ export async function GET(
         "Content-Disposition": `inline; filename="fs001-book.pdf"`,
         "Cache-Control": "private, no-store, no-cache, must-revalidate, max-age=0",
         "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Content-Security-Policy": "frame-ancestors 'self'",
+        "Access-Control-Allow-Origin": "*",
       },
     });
   } catch (error) {

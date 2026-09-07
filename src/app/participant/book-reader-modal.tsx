@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { BookOpen, X, Maximize2, Minimize2, ShieldAlert, Sparkles, LoaderCircle } from "lucide-react";
+import { BookOpen, X, Maximize2, Minimize2, ShieldAlert, AlertCircle, LoaderCircle } from "lucide-react";
 
 interface BookReaderModalProps {
   programCode: string;
@@ -19,10 +19,38 @@ export function BookReaderModal({
   const [isOpen, setIsOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Prevent right-click and keyboard save/print shortcuts when open
+  const pdfUrl = `/api/participant/book-reader/${programCode}#toolbar=0&navpanes=0&scrollbar=1`;
+
+  // Pre-check if book is accessible when opened
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      setLoading(true);
+      setErrorMsg(null);
+      return;
+    }
+
+    let isMounted = true;
+    fetch(`/api/participant/book-reader/${programCode}`, { method: "HEAD" })
+      .then((res) => {
+        if (!isMounted) return;
+        if (!res.ok) {
+          if (res.status === 404) {
+            setErrorMsg(
+              "Book PDF file is not found on the server. Please ensure 'fs001-book.pdf' is placed in 'private_assets/books/' or 'public/books/'."
+            );
+          } else if (res.status === 403) {
+            setErrorMsg("Access Restricted: You are not registered for this Book Test programme.");
+          } else {
+            setErrorMsg("Unable to load the book. Please try again later.");
+          }
+        }
+        setLoading(false);
+      })
+      .catch(() => {
+        if (isMounted) setLoading(false);
+      });
 
     const handleKeyDown = (e: KeyboardEvent) => {
       // Block Ctrl/Cmd + S (Save), Ctrl/Cmd + P (Print), Ctrl/Cmd + C (Copy)
@@ -43,19 +71,19 @@ export function BookReaderModal({
     window.addEventListener("contextmenu", handleContextMenu);
 
     return () => {
+      isMounted = false;
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("contextmenu", handleContextMenu);
     };
-  }, [isOpen]);
-
-  const pdfUrl = `/api/participant/book-reader/${programCode}#toolbar=0&navpanes=0&scrollbar=1`;
+  }, [isOpen, programCode]);
 
   return (
     <>
       {/* Trigger Button on Dashboard Card */}
       <button
+        type="button"
         onClick={() => setIsOpen(true)}
-        className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-gold via-amber-400 to-amber-500 px-4 py-2 text-xs font-black text-emerald shadow-sm transition-all hover:scale-[1.02] hover:shadow-md active:scale-95"
+        className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-gold via-amber-400 to-amber-500 px-4 py-2 text-xs font-black text-emerald shadow-sm transition-all hover:scale-[1.02] hover:shadow-md active:scale-95 cursor-pointer"
       >
         <BookOpen size={16} className="text-emerald" />
         <span>Read Book (Online Viewer)</span>
@@ -64,8 +92,8 @@ export function BookReaderModal({
       {/* Reader Modal Overlay */}
       {isOpen && (
         <div
-          className={`fixed inset-0 z-[100] flex flex-col bg-black/80 backdrop-blur-md transition-all ${
-            isFullscreen ? "p-0" : "p-2 sm:p-5"
+          className={`fixed inset-0 z-[100] flex flex-col bg-black/85 backdrop-blur-md transition-all ${
+            isFullscreen ? "p-0" : "p-2 sm:p-4 md:p-6"
           }`}
           onContextMenu={(e) => e.preventDefault()}
         >
@@ -82,7 +110,7 @@ export function BookReaderModal({
             className={`flex flex-col overflow-hidden bg-[#0d2822] shadow-2xl transition-all ${
               isFullscreen
                 ? "h-full w-full rounded-none"
-                : "mx-auto h-[94vh] w-full max-w-5xl rounded-3xl border border-gold/30"
+                : "mx-auto h-[92vh] w-full max-w-5xl rounded-3xl border border-gold/30"
             }`}
           >
             {/* Header / Top Bar */}
@@ -109,6 +137,7 @@ export function BookReaderModal({
               <div className="flex items-center gap-2">
                 {/* Fullscreen Toggle */}
                 <button
+                  type="button"
                   onClick={() => setIsFullscreen(!isFullscreen)}
                   title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
                   className="grid size-9 place-items-center rounded-xl border border-white/15 bg-white/5 text-white/80 transition hover:bg-white/15 hover:text-white"
@@ -118,6 +147,7 @@ export function BookReaderModal({
 
                 {/* Close Button */}
                 <button
+                  type="button"
                   onClick={() => setIsOpen(false)}
                   title="Close Reader"
                   className="grid size-9 place-items-center rounded-xl bg-red-500/20 text-red-300 transition hover:bg-red-500 hover:text-white"
@@ -141,7 +171,7 @@ export function BookReaderModal({
             {/* Viewer Content Area */}
             <div className="relative flex-1 bg-[#1a1f1d] select-none">
               {loading && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#111816] text-white">
+                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[#111816] text-white">
                   <LoaderCircle size={32} className="animate-spin text-gold" />
                   <p className="font-serif text-sm font-semibold text-emerald-200">
                     Loading book for online reading...
@@ -149,16 +179,33 @@ export function BookReaderModal({
                 </div>
               )}
 
-              <iframe
-                src={pdfUrl}
-                title={`${programName} Online Book`}
-                onLoad={() => setLoading(false)}
-                className="h-full w-full border-0 select-none"
-                style={{
-                  pointerEvents: "auto",
-                  userSelect: "none",
-                }}
-              />
+              {errorMsg ? (
+                <div className="flex h-full flex-col items-center justify-center p-8 text-center text-white">
+                  <div className="flex size-14 items-center justify-center rounded-2xl bg-red-500/20 text-red-400 mb-4">
+                    <AlertCircle size={28} />
+                  </div>
+                  <h3 className="font-serif text-xl font-bold text-red-300 mb-2">
+                    Unable to Open Book
+                  </h3>
+                  <p className="max-w-md text-sm text-white/80 mb-6">
+                    {errorMsg}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setIsOpen(false)}
+                    className="rounded-full bg-white/10 px-6 py-2.5 text-xs font-bold text-white hover:bg-white/20"
+                  >
+                    Close Reader
+                  </button>
+                </div>
+              ) : (
+                <iframe
+                  src={pdfUrl}
+                  title={`${programName} Online Book`}
+                  onLoad={() => setLoading(false)}
+                  className="h-full w-full border-0 select-none bg-white"
+                />
+              )}
             </div>
           </div>
         </div>
