@@ -17,6 +17,9 @@ import {
   TrendingUp,
   Layers,
   BookOpen,
+  CheckCircle2,
+  ListOrdered,
+  ChevronDown,
 } from "lucide-react";
 
 export interface IndividualLeaderEntry {
@@ -40,6 +43,30 @@ export interface DistrictLeaderEntry {
   rank: number;
 }
 
+export interface ProgramWinnerEntry {
+  participantId: string;
+  registrationId: string;
+  name: string;
+  district: string;
+  gender: "male" | "female";
+  category: "junior" | "senior" | "super_senior";
+  grade: string | null;
+  position: string | null;
+  points: number;
+  rank: number;
+  isPodium: boolean;
+}
+
+export interface PublishedProgramResult {
+  id: string;
+  code: string;
+  name: string;
+  categoryEligibility: string;
+  genderEligibility: string;
+  totalAwarded: number;
+  winners: ProgramWinnerEntry[];
+}
+
 export interface ResultsDataPayload {
   districtOverall: {
     all: DistrictLeaderEntry[];
@@ -56,16 +83,21 @@ export interface ResultsDataPayload {
     senior: { all: IndividualLeaderEntry[]; male: IndividualLeaderEntry[]; female: IndividualLeaderEntry[] };
     super_senior: { all: IndividualLeaderEntry[]; male: IndividualLeaderEntry[]; female: IndividualLeaderEntry[] };
   };
+  publishedPrograms: PublishedProgramResult[];
   stats: {
     totalPoints: number;
     totalActiveParticipants: number;
     totalSubmissions: number;
+    totalPublishedPrograms: number;
     leadingDistrict: string;
     leadingDistrictPoints: number;
   };
 }
 
 export function ResultsClient({ data }: { data: ResultsDataPayload }) {
+  // Active Tab View: 'district' | 'individual' | 'programs'
+  const [activeTab, setActiveTab] = useState<"district" | "individual" | "programs">("district");
+
   // District Leaderboard State
   const [districtCategory, setDistrictCategory] = useState<"overall" | "junior" | "senior" | "super_senior">("overall");
   const [districtGender, setDistrictGender] = useState<"all" | "male" | "female">("all");
@@ -75,6 +107,10 @@ export function ResultsClient({ data }: { data: ResultsDataPayload }) {
   const [individualCategory, setIndividualCategory] = useState<"junior" | "senior" | "super_senior">("junior");
   const [individualGender, setIndividualGender] = useState<"all" | "male" | "female">("all");
   const [individualShowAll, setIndividualShowAll] = useState(false);
+
+  // Program Results Filter State
+  const [programCategory, setProgramCategory] = useState<"all" | "junior" | "senior" | "super_senior" | "general">("all");
+  const [selectedProgramId, setSelectedProgramId] = useState<string>("all");
 
   // Search filter
   const [searchQuery, setSearchQuery] = useState("");
@@ -108,11 +144,36 @@ export function ResultsClient({ data }: { data: ResultsDataPayload }) {
     );
   }, [data, individualCategory, individualGender, searchQuery]);
 
+  // Compute Filtered Published Programs
+  const filteredPrograms = useMemo(() => {
+    let list = data.publishedPrograms || [];
+    if (programCategory !== "all") {
+      list = list.filter((p) => p.categoryEligibility === programCategory);
+    }
+    if (selectedProgramId !== "all") {
+      list = list.filter((p) => p.id === selectedProgramId);
+    }
+    if (!searchQuery.trim()) return list;
+
+    const q = searchQuery.toLowerCase().trim();
+    return list.filter(
+      (p) =>
+        p.code.toLowerCase().includes(q) ||
+        p.name.toLowerCase().includes(q) ||
+        p.winners.some(
+          (w) =>
+            w.name.toLowerCase().includes(q) ||
+            w.registrationId.toLowerCase().includes(q) ||
+            w.district.toLowerCase().includes(q)
+        )
+    );
+  }, [data.publishedPrograms, programCategory, selectedProgramId, searchQuery]);
+
   const displayedDistricts = districtShowAll ? activeDistrictEntries : activeDistrictEntries.slice(0, 10);
   const displayedIndividuals = individualShowAll ? activeIndividualEntries : activeIndividualEntries.slice(0, 10);
 
   return (
-    <div className="space-y-12">
+    <div className="space-y-10">
       {/* Top Highlights Banner */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
         <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#063d35] to-[#0b5549] p-4 text-white shadow-lg shadow-emerald/10 ring-1 ring-white/10 sm:p-5">
@@ -153,14 +214,56 @@ export function ResultsClient({ data }: { data: ResultsDataPayload }) {
 
         <div className="group relative overflow-hidden rounded-2xl bg-white p-4 text-ink shadow-sm ring-1 ring-ink/5 sm:p-5">
           <div className="flex items-center gap-2 text-gold">
-            <TrendingUp size={18} />
-            <span className="text-[11px] font-bold uppercase tracking-wider text-muted">Submissions</span>
+            <Award size={18} />
+            <span className="text-[11px] font-bold uppercase tracking-wider text-muted">Published Results</span>
           </div>
           <p className="mt-2 font-serif text-xl font-bold sm:text-2xl">
-            {data.stats.totalSubmissions.toLocaleString()}
+            {data.stats.totalPublishedPrograms.toLocaleString()}
           </p>
-          <p className="mt-1 text-xs font-semibold text-muted">Program entries</p>
+          <p className="mt-1 text-xs font-semibold text-muted">Programmes graded</p>
         </div>
+      </div>
+
+      {/* Main Navigation Tabs */}
+      <div className="flex flex-wrap items-center justify-center gap-2 rounded-2xl bg-white/70 p-2 shadow-sm ring-1 ring-ink/5 backdrop-blur sm:gap-3">
+        <button
+          onClick={() => setActiveTab("district")}
+          className={`flex items-center gap-2 rounded-xl px-5 py-3 text-xs font-black uppercase tracking-wider transition-all sm:text-sm ${
+            activeTab === "district"
+              ? "bg-emerald text-white shadow-md shadow-emerald/20"
+              : "text-muted hover:bg-cream hover:text-ink"
+          }`}
+        >
+          <Crown size={17} className={activeTab === "district" ? "text-gold" : "text-muted"} />
+          District Leaderboard
+        </button>
+
+        <button
+          onClick={() => setActiveTab("individual")}
+          className={`flex items-center gap-2 rounded-xl px-5 py-3 text-xs font-black uppercase tracking-wider transition-all sm:text-sm ${
+            activeTab === "individual"
+              ? "bg-emerald text-white shadow-md shadow-emerald/20"
+              : "text-muted hover:bg-cream hover:text-ink"
+          }`}
+        >
+          <Trophy size={17} className={activeTab === "individual" ? "text-gold" : "text-muted"} />
+          Individual Stars
+        </button>
+
+        <button
+          onClick={() => setActiveTab("programs")}
+          className={`flex items-center gap-2 rounded-xl px-5 py-3 text-xs font-black uppercase tracking-wider transition-all sm:text-sm ${
+            activeTab === "programs"
+              ? "bg-emerald text-white shadow-md shadow-emerald/20"
+              : "text-muted hover:bg-cream hover:text-ink"
+          }`}
+        >
+          <Award size={17} className={activeTab === "programs" ? "text-gold" : "text-muted"} />
+          Program Results
+          <span className="rounded-full bg-gold/30 px-2 py-0.5 text-[10px] font-black text-ink">
+            {data.publishedPrograms.length}
+          </span>
+        </button>
       </div>
 
       {/* Global Quick Search */}
@@ -170,7 +273,7 @@ export function ResultsClient({ data }: { data: ResultsDataPayload }) {
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Quick search by District Name, Participant Name or Registration ID..."
+          placeholder="Quick search by Program Name/Code, District, Participant Name or Registration ID..."
           className="h-13 w-full rounded-2xl border border-ink/15 bg-white pl-12 pr-4 text-sm font-semibold text-ink shadow-sm outline-none transition-all placeholder:text-muted/70 focus:border-emerald focus:ring-4 focus:ring-emerald/10"
         />
         {searchQuery && (
@@ -184,78 +287,49 @@ export function ResultsClient({ data }: { data: ResultsDataPayload }) {
       </div>
 
       {/* ========================================================================= */}
-      {/* SECTION 1: DISTRICT LEADERBOARD                                           */}
+      {/* TAB 1: DISTRICT LEADERBOARD                                               */}
       {/* ========================================================================= */}
-      <section className="relative rounded-3xl bg-white p-5 shadow-sm ring-1 ring-ink/5 sm:p-8">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="flex size-7 items-center justify-center rounded-xl bg-gold/20 text-gold">
-                <Crown size={17} />
-              </span>
-              <p className="text-xs font-bold uppercase tracking-[.25em] text-gold">
-                District Championship
+      {activeTab === "district" && (
+        <section className="relative rounded-3xl bg-white p-5 shadow-sm ring-1 ring-ink/5 sm:p-8">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="flex size-7 items-center justify-center rounded-xl bg-gold/20 text-gold">
+                  <Crown size={17} />
+                </span>
+                <p className="text-xs font-bold uppercase tracking-[.25em] text-gold">
+                  District Championship
+                </p>
+              </div>
+              <h2 className="mt-1 font-serif text-2xl font-bold text-ink sm:text-3xl">
+                District Leaderboard
+              </h2>
+              <p className="mt-1 text-xs font-medium text-muted sm:text-sm">
+                {districtCategory === "overall"
+                  ? "Combined total points across Junior, Senior & Super Senior categories."
+                  : `Standings for ${districtCategory.replace("_", " ")} category.`}
               </p>
             </div>
-            <h2 className="mt-1 font-serif text-2xl font-bold text-ink sm:text-3xl">
-              District Leaderboard
-            </h2>
-            <p className="mt-1 text-xs font-medium text-muted sm:text-sm">
-              {districtCategory === "overall"
-                ? "Combined total points across Junior, Senior & Super Senior categories."
-                : `Standings for ${districtCategory.replace("_", " ")} category.`}
-            </p>
-          </div>
 
-          {/* Category Tabs for District */}
-          <div className="flex flex-wrap items-center gap-1.5 rounded-2xl bg-cream/70 p-1.5 text-xs font-bold">
-            {(
-              [
-                ["overall", "All Categories (Combined)"],
-                ["junior", "Junior"],
-                ["senior", "Senior"],
-                ["super_senior", "Super Senior"],
-              ] as const
-            ).map(([cat, label]) => {
-              const active = districtCategory === cat;
-              return (
-                <button
-                  key={cat}
-                  onClick={() => setDistrictCategory(cat)}
-                  className={`rounded-xl px-3.5 py-2 transition-all ${
-                    active
-                      ? "bg-emerald text-white shadow-md shadow-emerald/20"
-                      : "text-muted hover:bg-white hover:text-ink"
-                  }`}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Gender Filter Pills for District */}
-        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-ink/5 pt-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-muted">Gender:</span>
-            <div className="flex gap-1.5">
+            {/* Category Tabs for District */}
+            <div className="flex flex-wrap items-center gap-1.5 rounded-2xl bg-cream/70 p-1.5 text-xs font-bold">
               {(
                 [
-                  ["all", "Common (All)"],
-                  ["male", "Male Only"],
-                  ["female", "Female Only"],
+                  ["overall", "All Categories (Combined)"],
+                  ["junior", "Junior"],
+                  ["senior", "Senior"],
+                  ["super_senior", "Super Senior"],
                 ] as const
-              ).map(([gender, label]) => {
-                const active = districtGender === gender;
+              ).map(([cat, label]) => {
+                const active = districtCategory === cat;
                 return (
                   <button
-                    key={gender}
-                    onClick={() => setDistrictGender(gender)}
-                    className={`rounded-full px-3 py-1 text-xs font-bold transition-all ${
+                    key={cat}
+                    onClick={() => setDistrictCategory(cat)}
+                    className={`rounded-xl px-3.5 py-2 transition-all ${
                       active
-                        ? "bg-gold text-emerald shadow-sm"
-                        : "bg-cream text-muted hover:bg-ink/5 hover:text-ink"
+                        ? "bg-emerald text-white shadow-md shadow-emerald/20"
+                        : "text-muted hover:bg-white hover:text-ink"
                     }`}
                   >
                     {label}
@@ -265,295 +339,297 @@ export function ResultsClient({ data }: { data: ResultsDataPayload }) {
             </div>
           </div>
 
-          <span className="text-xs font-bold text-muted">
-            Showing {displayedDistricts.length} of {activeDistrictEntries.length} Districts
-          </span>
-        </div>
-
-        {/* Top 3 Podium Highlights for District */}
-        {activeDistrictEntries.length >= 3 && !searchQuery && (
-          <div className="mt-7 grid gap-3 sm:grid-cols-3">
-            {/* 2nd Place */}
-            <div className="order-2 flex flex-col justify-between rounded-2xl border border-slate-200 bg-gradient-to-b from-slate-50 to-slate-100/80 p-5 shadow-sm sm:order-1">
-              <div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-tr from-slate-300 to-slate-100 font-serif text-lg font-bold text-slate-700 shadow-sm ring-1 ring-slate-300">
-                      🥈
-                    </div>
-                    <span className="rounded-full bg-slate-200/80 px-2.5 py-0.5 text-[10px] font-black uppercase text-slate-700">
-                      2nd Place
-                    </span>
-                  </div>
-                  <Medal size={20} className="text-slate-400" />
-                </div>
-                <h3 className="mt-4 font-serif text-xl font-bold text-slate-900">
-                  {activeDistrictEntries[1]?.district}
-                </h3>
-                <div className="mt-2 space-y-1 text-xs text-slate-600">
-                  <p>👥 {activeDistrictEntries[1]?.participantsCount} Participants</p>
-                  <p>📑 {activeDistrictEntries[1]?.programmesCount} Entries</p>
-                </div>
-              </div>
-              <div className="mt-4 border-t border-slate-200 pt-3">
-                <span className="text-2xl font-black text-slate-800">
-                  {activeDistrictEntries[1]?.totalPoints}
-                </span>
-                <span className="ml-1.5 text-xs font-bold text-slate-500 uppercase">Points</span>
-              </div>
-            </div>
-
-            {/* 1st Place Champion */}
-            <div className="order-1 flex flex-col justify-between rounded-2xl border-2 border-gold bg-gradient-to-b from-amber-50 via-gold/10 to-amber-100/80 p-6 shadow-xl shadow-gold/15 ring-2 ring-gold/30 sm:order-2 sm:-translate-y-2">
-              <div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="flex size-11 items-center justify-center rounded-2xl bg-gradient-to-tr from-amber-400 to-yellow-200 font-serif text-2xl font-bold text-amber-950 shadow-md ring-2 ring-amber-300">
-                      🥇
-                    </div>
-                    <span className="rounded-full bg-gold px-3 py-1 text-[11px] font-black uppercase tracking-wider text-emerald shadow-sm">
-                      ★ 1st Place Leader
-                    </span>
-                  </div>
-                  <Crown size={24} className="text-gold animate-bounce" />
-                </div>
-                <h3 className="mt-4 font-serif text-2xl font-extrabold text-ink sm:text-3xl">
-                  {activeDistrictEntries[0]?.district}
-                </h3>
-                <div className="mt-2 space-y-1 text-xs font-semibold text-emerald">
-                  <p>👥 {activeDistrictEntries[0]?.participantsCount} Registered Contestants</p>
-                  <p>📑 {activeDistrictEntries[0]?.programmesCount} Program Participations</p>
-                </div>
-              </div>
-              <div className="mt-5 border-t border-gold/30 pt-3">
-                <span className="font-serif text-4xl font-black text-emerald">
-                  {activeDistrictEntries[0]?.totalPoints}
-                </span>
-                <span className="ml-2 text-sm font-black uppercase tracking-wider text-gold">
-                  Points
-                </span>
-              </div>
-            </div>
-
-            {/* 3rd Place */}
-            <div className="order-3 flex flex-col justify-between rounded-2xl border border-amber-200 bg-gradient-to-b from-amber-50/50 to-orange-100/60 p-5 shadow-sm">
-              <div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-tr from-amber-600 to-amber-300 font-serif text-lg font-bold text-white shadow-sm ring-1 ring-amber-400">
-                      🥉
-                    </div>
-                    <span className="rounded-full bg-amber-200/80 px-2.5 py-0.5 text-[10px] font-black uppercase text-amber-900">
-                      3rd Place
-                    </span>
-                  </div>
-                  <Award size={20} className="text-amber-600" />
-                </div>
-                <h3 className="mt-4 font-serif text-xl font-bold text-amber-950">
-                  {activeDistrictEntries[2]?.district}
-                </h3>
-                <div className="mt-2 space-y-1 text-xs text-amber-800">
-                  <p>👥 {activeDistrictEntries[2]?.participantsCount} Participants</p>
-                  <p>📑 {activeDistrictEntries[2]?.programmesCount} Entries</p>
-                </div>
-              </div>
-              <div className="mt-4 border-t border-amber-200 pt-3">
-                <span className="text-2xl font-black text-amber-900">
-                  {activeDistrictEntries[2]?.totalPoints}
-                </span>
-                <span className="ml-1.5 text-xs font-bold text-amber-700 uppercase">Points</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* District Table */}
-        <div className="mt-7 overflow-hidden rounded-2xl border border-ink/10">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="border-b border-ink/10 bg-cream/50 text-[11px] font-bold uppercase tracking-wider text-muted">
-                  <th className="px-4 py-3.5 sm:px-6">Rank</th>
-                  <th className="px-4 py-3.5 sm:px-6">District</th>
-                  <th className="px-4 py-3.5 text-center sm:px-6">Participants Count</th>
-                  <th className="px-4 py-3.5 text-center sm:px-6">Participated Programmes</th>
-                  <th className="px-4 py-3.5 text-right sm:px-6">Total Mark / Points</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-ink/5 text-sm font-semibold">
-                {displayedDistricts.map((item) => {
-                  const isGold = item.rank === 1;
-                  const isSilver = item.rank === 2;
-                  const isBronze = item.rank === 3;
-                  const isTop3 = isGold || isSilver || isBronze;
-
+          {/* Gender Filter Pills for District */}
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-ink/5 pt-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-muted">Gender:</span>
+              <div className="flex gap-1.5">
+                {(
+                  [
+                    ["all", "Common (All)"],
+                    ["male", "Male Only"],
+                    ["female", "Female Only"],
+                  ] as const
+                ).map(([gender, label]) => {
+                  const active = districtGender === gender;
                   return (
-                    <tr
-                      key={item.district}
-                      className={`transition-colors hover:bg-cream/40 ${
-                        isGold
-                          ? "bg-amber-50/50 font-bold"
-                          : isSilver
-                          ? "bg-slate-50/50"
-                          : isBronze
-                          ? "bg-orange-50/30"
-                          : ""
+                    <button
+                      key={gender}
+                      onClick={() => setDistrictGender(gender)}
+                      className={`rounded-full px-3 py-1 text-xs font-bold transition-all ${
+                        active
+                          ? "bg-gold text-emerald shadow-sm"
+                          : "bg-cream text-muted hover:bg-ink/5 hover:text-ink"
                       }`}
                     >
-                      {/* Rank / Badge */}
-                      <td className="px-4 py-4 sm:px-6">
-                        <RankBadge rank={item.rank} />
-                      </td>
-
-                      {/* District Name */}
-                      <td className="px-4 py-4 sm:px-6">
-                        <div className="flex items-center gap-2">
-                          <MapPin size={16} className={isTop3 ? "text-gold" : "text-muted"} />
-                          <span className={`font-serif text-base ${isTop3 ? "font-bold text-ink" : "text-ink/90"}`}>
-                            {item.district}
-                          </span>
-                          {isGold && (
-                            <span className="hidden rounded-full bg-gold/25 px-2 py-0.5 text-[9px] font-black uppercase text-emerald sm:inline-block">
-                              Leader
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Participants Count */}
-                      <td className="px-4 py-4 text-center sm:px-6">
-                        <span className="inline-flex items-center gap-1 rounded-lg bg-cream px-2.5 py-1 text-xs font-bold text-ink">
-                          <Users size={12} className="text-muted" />
-                          {item.participantsCount}
-                        </span>
-                      </td>
-
-                      {/* Participated Programmes Count */}
-                      <td className="px-4 py-4 text-center sm:px-6">
-                        <span className="inline-flex items-center gap-1 rounded-lg bg-cream px-2.5 py-1 text-xs font-bold text-ink">
-                          <BookOpen size={12} className="text-muted" />
-                          {item.programmesCount}
-                        </span>
-                      </td>
-
-                      {/* Total Mark / Points */}
-                      <td className="px-4 py-4 text-right sm:px-6">
-                        <span
-                          className={`font-serif text-lg font-black ${
-                            isGold
-                              ? "text-emerald"
-                              : isSilver
-                              ? "text-slate-800"
-                              : isBronze
-                              ? "text-amber-800"
-                              : "text-ink"
-                          }`}
-                        >
-                          {item.totalPoints}
-                        </span>
-                        <span className="ml-1 text-[10px] font-bold uppercase text-muted">pts</span>
-                      </td>
-                    </tr>
+                      {label}
+                    </button>
                   );
                 })}
+              </div>
+            </div>
 
-                {displayedDistricts.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="p-8 text-center text-sm font-medium text-muted">
-                      No district results found matching the current filters.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+            <span className="text-xs font-bold text-muted">
+              Showing {displayedDistricts.length} of {activeDistrictEntries.length} Districts
+            </span>
           </div>
 
-          {/* Toggle Show Top 10 / Show All */}
-          {activeDistrictEntries.length > 10 && (
-            <div className="border-t border-ink/10 bg-cream/30 p-3 text-center">
-              <button
-                onClick={() => setDistrictShowAll(!districtShowAll)}
-                className="rounded-xl px-4 py-1.5 text-xs font-bold text-emerald hover:bg-emerald/10 transition-colors"
-              >
-                {districtShowAll
-                  ? "Show Top 10 Only"
-                  : `View All ${activeDistrictEntries.length} Districts`}
-              </button>
+          {/* Top 3 Podium Highlights for District */}
+          {activeDistrictEntries.length >= 3 && !searchQuery && (
+            <div className="mt-7 grid gap-3 sm:grid-cols-3">
+              {/* 2nd Place */}
+              <div className="order-2 flex flex-col justify-between rounded-2xl border border-slate-200 bg-gradient-to-b from-slate-50 to-slate-100/80 p-5 shadow-sm sm:order-1">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-tr from-slate-300 to-slate-100 font-serif text-lg font-bold text-slate-700 shadow-sm ring-1 ring-slate-300">
+                        🥈
+                      </div>
+                      <span className="rounded-full bg-slate-200/80 px-2.5 py-0.5 text-[10px] font-black uppercase text-slate-700">
+                        2nd Place
+                      </span>
+                    </div>
+                    <Medal size={20} className="text-slate-400" />
+                  </div>
+                  <h3 className="mt-4 font-serif text-xl font-bold text-slate-900">
+                    {activeDistrictEntries[1]?.district}
+                  </h3>
+                  <div className="mt-2 space-y-1 text-xs text-slate-600">
+                    <p>👥 {activeDistrictEntries[1]?.participantsCount} Participants</p>
+                    <p>📑 {activeDistrictEntries[1]?.programmesCount} Entries</p>
+                  </div>
+                </div>
+                <div className="mt-4 border-t border-slate-200 pt-3">
+                  <span className="text-2xl font-black text-slate-800">
+                    {activeDistrictEntries[1]?.totalPoints}
+                  </span>
+                  <span className="ml-1.5 text-xs font-bold text-slate-500 uppercase">Points</span>
+                </div>
+              </div>
+
+              {/* 1st Place Champion */}
+              <div className="order-1 flex flex-col justify-between rounded-2xl border-2 border-gold bg-gradient-to-b from-amber-50 via-gold/10 to-amber-100/80 p-6 shadow-xl shadow-gold/15 ring-2 ring-gold/30 sm:order-2 sm:-translate-y-2">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="flex size-11 items-center justify-center rounded-2xl bg-gradient-to-tr from-amber-400 to-yellow-200 font-serif text-2xl font-bold text-amber-950 shadow-md ring-2 ring-amber-300">
+                        🥇
+                      </div>
+                      <span className="rounded-full bg-gold px-3 py-1 text-[11px] font-black uppercase tracking-wider text-emerald shadow-sm">
+                        ★ 1st Place Leader
+                      </span>
+                    </div>
+                    <Crown size={24} className="text-gold animate-bounce" />
+                  </div>
+                  <h3 className="mt-4 font-serif text-2xl font-extrabold text-ink sm:text-3xl">
+                    {activeDistrictEntries[0]?.district}
+                  </h3>
+                  <div className="mt-2 space-y-1 text-xs font-semibold text-emerald">
+                    <p>👥 {activeDistrictEntries[0]?.participantsCount} Registered Contestants</p>
+                    <p>📑 {activeDistrictEntries[0]?.programmesCount} Program Participations</p>
+                  </div>
+                </div>
+                <div className="mt-5 border-t border-gold/30 pt-3">
+                  <span className="font-serif text-4xl font-black text-emerald">
+                    {activeDistrictEntries[0]?.totalPoints}
+                  </span>
+                  <span className="ml-2 text-sm font-black uppercase tracking-wider text-gold">
+                    Points
+                  </span>
+                </div>
+              </div>
+
+              {/* 3rd Place */}
+              <div className="order-3 flex flex-col justify-between rounded-2xl border border-amber-200 bg-gradient-to-b from-amber-50/50 to-orange-100/60 p-5 shadow-sm">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-tr from-amber-600 to-amber-300 font-serif text-lg font-bold text-white shadow-sm ring-1 ring-amber-400">
+                        🥉
+                      </div>
+                      <span className="rounded-full bg-amber-200/80 px-2.5 py-0.5 text-[10px] font-black uppercase text-amber-900">
+                        3rd Place
+                      </span>
+                    </div>
+                    <Award size={20} className="text-amber-600" />
+                  </div>
+                  <h3 className="mt-4 font-serif text-xl font-bold text-amber-950">
+                    {activeDistrictEntries[2]?.district}
+                  </h3>
+                  <div className="mt-2 space-y-1 text-xs text-amber-800">
+                    <p>👥 {activeDistrictEntries[2]?.participantsCount} Participants</p>
+                    <p>📑 {activeDistrictEntries[2]?.programmesCount} Entries</p>
+                  </div>
+                </div>
+                <div className="mt-4 border-t border-amber-200 pt-3">
+                  <span className="text-2xl font-black text-amber-900">
+                    {activeDistrictEntries[2]?.totalPoints}
+                  </span>
+                  <span className="ml-1.5 text-xs font-bold text-amber-700 uppercase">Points</span>
+                </div>
+              </div>
             </div>
           )}
-        </div>
-      </section>
+
+          {/* District Table */}
+          <div className="mt-7 overflow-hidden rounded-2xl border border-ink/10">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-ink/10 bg-cream/50 text-[11px] font-bold uppercase tracking-wider text-muted">
+                    <th className="px-4 py-3.5 sm:px-6">Rank</th>
+                    <th className="px-4 py-3.5 sm:px-6">District</th>
+                    <th className="px-4 py-3.5 text-center sm:px-6">Participants Count</th>
+                    <th className="px-4 py-3.5 text-center sm:px-6">Participated Programmes</th>
+                    <th className="px-4 py-3.5 text-right sm:px-6">Total Mark / Points</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-ink/5 text-sm font-semibold">
+                  {displayedDistricts.map((item) => {
+                    const isGold = item.rank === 1;
+                    const isSilver = item.rank === 2;
+                    const isBronze = item.rank === 3;
+                    const isTop3 = isGold || isSilver || isBronze;
+
+                    return (
+                      <tr
+                        key={item.district}
+                        className={`transition-colors hover:bg-cream/40 ${
+                          isGold
+                            ? "bg-amber-50/50 font-bold"
+                            : isSilver
+                            ? "bg-slate-50/50"
+                            : isBronze
+                            ? "bg-orange-50/30"
+                            : ""
+                        }`}
+                      >
+                        {/* Rank / Badge */}
+                        <td className="px-4 py-4 sm:px-6">
+                          <RankBadge rank={item.rank} />
+                        </td>
+
+                        {/* District Name */}
+                        <td className="px-4 py-4 sm:px-6">
+                          <div className="flex items-center gap-2">
+                            <MapPin size={16} className={isTop3 ? "text-gold" : "text-muted"} />
+                            <span className={`font-serif text-base ${isTop3 ? "font-bold text-ink" : "text-ink/90"}`}>
+                              {item.district}
+                            </span>
+                            {isGold && (
+                              <span className="hidden rounded-full bg-gold/25 px-2 py-0.5 text-[9px] font-black uppercase text-emerald sm:inline-block">
+                                Leader
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Participants Count */}
+                        <td className="px-4 py-4 text-center sm:px-6">
+                          <span className="inline-flex items-center gap-1 rounded-lg bg-cream px-2.5 py-1 text-xs font-bold text-ink">
+                            <Users size={12} className="text-muted" />
+                            {item.participantsCount}
+                          </span>
+                        </td>
+
+                        {/* Participated Programmes Count */}
+                        <td className="px-4 py-4 text-center sm:px-6">
+                          <span className="inline-flex items-center gap-1 rounded-lg bg-cream px-2.5 py-1 text-xs font-bold text-ink">
+                            <BookOpen size={12} className="text-muted" />
+                            {item.programmesCount}
+                          </span>
+                        </td>
+
+                        {/* Total Mark / Points */}
+                        <td className="px-4 py-4 text-right sm:px-6">
+                          <span
+                            className={`font-serif text-lg font-black ${
+                              isGold
+                                ? "text-emerald"
+                                : isSilver
+                                ? "text-slate-800"
+                                : isBronze
+                                ? "text-amber-800"
+                                : "text-ink"
+                            }`}
+                          >
+                            {item.totalPoints}
+                          </span>
+                          <span className="ml-1 text-[10px] font-bold uppercase text-muted">pts</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+
+                  {displayedDistricts.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="p-8 text-center text-sm font-medium text-muted">
+                        No district results found matching the current filters.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Toggle Show Top 10 / Show All */}
+            {activeDistrictEntries.length > 10 && (
+              <div className="border-t border-ink/10 bg-cream/30 p-3 text-center">
+                <button
+                  onClick={() => setDistrictShowAll(!districtShowAll)}
+                  className="rounded-xl px-4 py-1.5 text-xs font-bold text-emerald hover:bg-emerald/10 transition-colors"
+                >
+                  {districtShowAll
+                    ? "Show Top 10 Only"
+                    : `View All ${activeDistrictEntries.length} Districts`}
+                </button>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* ========================================================================= */}
-      {/* SECTION 2: INDIVIDUAL LEADERBOARD                                         */}
+      {/* TAB 2: INDIVIDUAL LEADERBOARD                                             */}
       {/* ========================================================================= */}
-      <section className="relative rounded-3xl bg-white p-5 shadow-sm ring-1 ring-ink/5 sm:p-8">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="flex size-7 items-center justify-center rounded-xl bg-emerald/10 text-emerald">
-                <Trophy size={17} />
-              </span>
-              <p className="text-xs font-bold uppercase tracking-[.25em] text-emerald">
-                Individual Stars
+      {activeTab === "individual" && (
+        <section className="relative rounded-3xl bg-white p-5 shadow-sm ring-1 ring-ink/5 sm:p-8">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="flex size-7 items-center justify-center rounded-xl bg-emerald/10 text-emerald">
+                  <Trophy size={17} />
+                </span>
+                <p className="text-xs font-bold uppercase tracking-[.25em] text-emerald">
+                  Individual Stars
+                </p>
+              </div>
+              <h2 className="mt-1 font-serif text-2xl font-bold text-ink sm:text-3xl">
+                Individual Leaderboard
+              </h2>
+              <p className="mt-1 text-xs font-medium text-muted sm:text-sm">
+                Top performing individual participants categorized by age division.
               </p>
             </div>
-            <h2 className="mt-1 font-serif text-2xl font-bold text-ink sm:text-3xl">
-              Individual Leaderboard
-            </h2>
-            <p className="mt-1 text-xs font-medium text-muted sm:text-sm">
-              Top performing individual participants categorized by age division.
-            </p>
-          </div>
 
-          {/* Category Tabs for Individual (Default: Junior) */}
-          <div className="flex flex-wrap items-center gap-1.5 rounded-2xl bg-cream/70 p-1.5 text-xs font-bold">
-            {(
-              [
-                ["junior", "Junior (Default)"],
-                ["senior", "Senior"],
-                ["super_senior", "Super Senior"],
-              ] as const
-            ).map(([cat, label]) => {
-              const active = individualCategory === cat;
-              return (
-                <button
-                  key={cat}
-                  onClick={() => setIndividualCategory(cat)}
-                  className={`rounded-xl px-4 py-2 transition-all ${
-                    active
-                      ? "bg-emerald text-white shadow-md shadow-emerald/20"
-                      : "text-muted hover:bg-white hover:text-ink"
-                  }`}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Gender Filter Pills for Individual */}
-        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-ink/5 pt-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-muted">Gender:</span>
-            <div className="flex gap-1.5">
+            {/* Category Tabs for Individual (Default: Junior) */}
+            <div className="flex flex-wrap items-center gap-1.5 rounded-2xl bg-cream/70 p-1.5 text-xs font-bold">
               {(
                 [
-                  ["all", "All"],
-                  ["male", "Male Only"],
-                  ["female", "Female Only"],
+                  ["junior", "Junior (Default)"],
+                  ["senior", "Senior"],
+                  ["super_senior", "Super Senior"],
                 ] as const
-              ).map(([gender, label]) => {
-                const active = individualGender === gender;
+              ).map(([cat, label]) => {
+                const active = individualCategory === cat;
                 return (
                   <button
-                    key={gender}
-                    onClick={() => setIndividualGender(gender)}
-                    className={`rounded-full px-3 py-1 text-xs font-bold transition-all ${
+                    key={cat}
+                    onClick={() => setIndividualCategory(cat)}
+                    className={`rounded-xl px-4 py-2 transition-all ${
                       active
-                        ? "bg-emerald text-white shadow-sm"
-                        : "bg-cream text-muted hover:bg-ink/5 hover:text-ink"
+                        ? "bg-emerald text-white shadow-md shadow-emerald/20"
+                        : "text-muted hover:bg-white hover:text-ink"
                     }`}
                   >
                     {label}
@@ -563,242 +639,626 @@ export function ResultsClient({ data }: { data: ResultsDataPayload }) {
             </div>
           </div>
 
-          <span className="text-xs font-bold text-muted">
-            Showing {displayedIndividuals.length} of {activeIndividualEntries.length} Performers
-          </span>
-        </div>
-
-        {/* Top 3 Podium Highlights for Individual (if at least 3 participants) */}
-        {activeIndividualEntries.length >= 3 && !searchQuery && (
-          <div className="mt-7 grid gap-3 sm:grid-cols-3">
-            {/* 2nd Place */}
-            <div className="order-2 flex flex-col justify-between rounded-2xl border border-slate-200 bg-gradient-to-b from-slate-50 to-slate-100/80 p-5 shadow-sm sm:order-1">
-              <div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-tr from-slate-300 to-slate-100 font-serif text-lg font-bold text-slate-700 shadow-sm ring-1 ring-slate-300">
-                      🥈
-                    </div>
-                    <span className="rounded-full bg-slate-200/80 px-2.5 py-0.5 text-[10px] font-black uppercase text-slate-700">
-                      2nd Place
-                    </span>
-                  </div>
-                  <Medal size={20} className="text-slate-400" />
-                </div>
-                <h3 className="mt-4 font-serif text-xl font-bold text-slate-900">
-                  {activeIndividualEntries[1]?.name}
-                </h3>
-                <p className="text-xs font-bold text-emerald">
-                  {activeIndividualEntries[1]?.registrationId}
-                </p>
-                <div className="mt-2 space-y-1 text-xs text-slate-600">
-                  <p>📍 {activeIndividualEntries[1]?.district}</p>
-                  <p>📑 {activeIndividualEntries[1]?.participatedCount} / {activeIndividualEntries[1]?.totalAvailablePrograms} Programs</p>
-                </div>
-              </div>
-              <div className="mt-4 border-t border-slate-200 pt-3">
-                <span className="text-2xl font-black text-slate-800">
-                  {activeIndividualEntries[1]?.totalPoints}
-                </span>
-                <span className="ml-1.5 text-xs font-bold text-slate-500 uppercase">Points</span>
-              </div>
-            </div>
-
-            {/* 1st Place Champion */}
-            <div className="order-1 flex flex-col justify-between rounded-2xl border-2 border-gold bg-gradient-to-b from-amber-50 via-gold/10 to-amber-100/80 p-6 shadow-xl shadow-gold/15 ring-2 ring-gold/30 sm:order-2 sm:-translate-y-2">
-              <div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="flex size-11 items-center justify-center rounded-2xl bg-gradient-to-tr from-amber-400 to-yellow-200 font-serif text-2xl font-bold text-amber-950 shadow-md ring-2 ring-amber-300">
-                      🥇
-                    </div>
-                    <span className="rounded-full bg-gold px-3 py-1 text-[11px] font-black uppercase tracking-wider text-emerald shadow-sm">
-                      ★ Top Performer
-                    </span>
-                  </div>
-                  <Crown size={24} className="text-gold animate-bounce" />
-                </div>
-                <h3 className="mt-4 font-serif text-2xl font-extrabold text-ink sm:text-3xl">
-                  {activeIndividualEntries[0]?.name}
-                </h3>
-                <p className="text-xs font-bold text-emerald">
-                  {activeIndividualEntries[0]?.registrationId}
-                </p>
-                <div className="mt-2 space-y-1 text-xs font-semibold text-emerald">
-                  <p>📍 {activeIndividualEntries[0]?.district}</p>
-                  <p>📑 {activeIndividualEntries[0]?.participatedCount} / {activeIndividualEntries[0]?.totalAvailablePrograms} Programs Participated</p>
-                </div>
-              </div>
-              <div className="mt-5 border-t border-gold/30 pt-3">
-                <span className="font-serif text-4xl font-black text-emerald">
-                  {activeIndividualEntries[0]?.totalPoints}
-                </span>
-                <span className="ml-2 text-sm font-black uppercase tracking-wider text-gold">
-                  Points
-                </span>
-              </div>
-            </div>
-
-            {/* 3rd Place */}
-            <div className="order-3 flex flex-col justify-between rounded-2xl border border-amber-200 bg-gradient-to-b from-amber-50/50 to-orange-100/60 p-5 shadow-sm">
-              <div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-tr from-amber-600 to-amber-300 font-serif text-lg font-bold text-white shadow-sm ring-1 ring-amber-400">
-                      🥉
-                    </div>
-                    <span className="rounded-full bg-amber-200/80 px-2.5 py-0.5 text-[10px] font-black uppercase text-amber-900">
-                      3rd Place
-                    </span>
-                  </div>
-                  <Award size={20} className="text-amber-600" />
-                </div>
-                <h3 className="mt-4 font-serif text-xl font-bold text-amber-950">
-                  {activeIndividualEntries[2]?.name}
-                </h3>
-                <p className="text-xs font-bold text-emerald">
-                  {activeIndividualEntries[2]?.registrationId}
-                </p>
-                <div className="mt-2 space-y-1 text-xs text-amber-800">
-                  <p>📍 {activeIndividualEntries[2]?.district}</p>
-                  <p>📑 {activeIndividualEntries[2]?.participatedCount} / {activeIndividualEntries[2]?.totalAvailablePrograms} Programs</p>
-                </div>
-              </div>
-              <div className="mt-4 border-t border-amber-200 pt-3">
-                <span className="text-2xl font-black text-amber-900">
-                  {activeIndividualEntries[2]?.totalPoints}
-                </span>
-                <span className="ml-1.5 text-xs font-bold text-amber-700 uppercase">Points</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Individual Table */}
-        <div className="mt-7 overflow-hidden rounded-2xl border border-ink/10">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="border-b border-ink/10 bg-cream/50 text-[11px] font-bold uppercase tracking-wider text-muted">
-                  <th className="px-4 py-3.5 sm:px-6">Rank</th>
-                  <th className="px-4 py-3.5 sm:px-6">Participant</th>
-                  <th className="px-4 py-3.5 sm:px-6">District</th>
-                  <th className="px-4 py-3.5 text-center sm:px-6">Programmes Participated</th>
-                  <th className="px-4 py-3.5 text-right sm:px-6">Total Mark / Points</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-ink/5 text-sm font-semibold">
-                {displayedIndividuals.map((item) => {
-                  const isGold = item.rank === 1;
-                  const isSilver = item.rank === 2;
-                  const isBronze = item.rank === 3;
-                  const isTop3 = isGold || isSilver || isBronze;
-
+          {/* Gender Filter Pills for Individual */}
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-ink/5 pt-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-muted">Gender:</span>
+              <div className="flex gap-1.5">
+                {(
+                  [
+                    ["all", "All"],
+                    ["male", "Male Only"],
+                    ["female", "Female Only"],
+                  ] as const
+                ).map(([gender, label]) => {
+                  const active = individualGender === gender;
                   return (
-                    <tr
-                      key={item.id}
-                      className={`transition-colors hover:bg-cream/40 ${
-                        isGold
-                          ? "bg-amber-50/50 font-bold"
-                          : isSilver
-                          ? "bg-slate-50/50"
-                          : isBronze
-                          ? "bg-orange-50/30"
-                          : ""
+                    <button
+                      key={gender}
+                      onClick={() => setIndividualGender(gender)}
+                      className={`rounded-full px-3 py-1 text-xs font-bold transition-all ${
+                        active
+                          ? "bg-emerald text-white shadow-sm"
+                          : "bg-cream text-muted hover:bg-ink/5 hover:text-ink"
                       }`}
                     >
-                      {/* Rank / Badge */}
-                      <td className="px-4 py-4 sm:px-6">
-                        <RankBadge rank={item.rank} />
-                      </td>
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-                      {/* Participant Name & Reg ID */}
-                      <td className="px-4 py-4 sm:px-6">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-serif text-base font-bold text-ink">
-                              {item.name}
-                            </span>
-                            <span className="rounded-full bg-emerald/10 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald">
-                              {item.registrationId}
+            <span className="text-xs font-bold text-muted">
+              Showing {displayedIndividuals.length} of {activeIndividualEntries.length} Performers
+            </span>
+          </div>
+
+          {/* Top 3 Podium Highlights for Individual (if at least 3 participants) */}
+          {activeIndividualEntries.length >= 3 && !searchQuery && (
+            <div className="mt-7 grid gap-3 sm:grid-cols-3">
+              {/* 2nd Place */}
+              <div className="order-2 flex flex-col justify-between rounded-2xl border border-slate-200 bg-gradient-to-b from-slate-50 to-slate-100/80 p-5 shadow-sm sm:order-1">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-tr from-slate-300 to-slate-100 font-serif text-lg font-bold text-slate-700 shadow-sm ring-1 ring-slate-300">
+                        🥈
+                      </div>
+                      <span className="rounded-full bg-slate-200/80 px-2.5 py-0.5 text-[10px] font-black uppercase text-slate-700">
+                        2nd Place
+                      </span>
+                    </div>
+                    <Medal size={20} className="text-slate-400" />
+                  </div>
+                  <h3 className="mt-4 font-serif text-xl font-bold text-slate-900">
+                    {activeIndividualEntries[1]?.name}
+                  </h3>
+                  <p className="text-xs font-bold text-emerald">
+                    {activeIndividualEntries[1]?.registrationId}
+                  </p>
+                  <div className="mt-2 space-y-1 text-xs text-slate-600">
+                    <p>📍 {activeIndividualEntries[1]?.district}</p>
+                    <p>📑 {activeIndividualEntries[1]?.participatedCount} / {activeIndividualEntries[1]?.totalAvailablePrograms} Programs</p>
+                  </div>
+                </div>
+                <div className="mt-4 border-t border-slate-200 pt-3">
+                  <span className="text-2xl font-black text-slate-800">
+                    {activeIndividualEntries[1]?.totalPoints}
+                  </span>
+                  <span className="ml-1.5 text-xs font-bold text-slate-500 uppercase">Points</span>
+                </div>
+              </div>
+
+              {/* 1st Place Champion */}
+              <div className="order-1 flex flex-col justify-between rounded-2xl border-2 border-gold bg-gradient-to-b from-amber-50 via-gold/10 to-amber-100/80 p-6 shadow-xl shadow-gold/15 ring-2 ring-gold/30 sm:order-2 sm:-translate-y-2">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="flex size-11 items-center justify-center rounded-2xl bg-gradient-to-tr from-amber-400 to-yellow-200 font-serif text-2xl font-bold text-amber-950 shadow-md ring-2 ring-amber-300">
+                        🥇
+                      </div>
+                      <span className="rounded-full bg-gold px-3 py-1 text-[11px] font-black uppercase tracking-wider text-emerald shadow-sm">
+                        ★ Top Performer
+                      </span>
+                    </div>
+                    <Crown size={24} className="text-gold animate-bounce" />
+                  </div>
+                  <h3 className="mt-4 font-serif text-2xl font-extrabold text-ink sm:text-3xl">
+                    {activeIndividualEntries[0]?.name}
+                  </h3>
+                  <p className="text-xs font-bold text-emerald">
+                    {activeIndividualEntries[0]?.registrationId}
+                  </p>
+                  <div className="mt-2 space-y-1 text-xs font-semibold text-emerald">
+                    <p>📍 {activeIndividualEntries[0]?.district}</p>
+                    <p>📑 {activeIndividualEntries[0]?.participatedCount} / {activeIndividualEntries[0]?.totalAvailablePrograms} Programs Participated</p>
+                  </div>
+                </div>
+                <div className="mt-5 border-t border-gold/30 pt-3">
+                  <span className="font-serif text-4xl font-black text-emerald">
+                    {activeIndividualEntries[0]?.totalPoints}
+                  </span>
+                  <span className="ml-2 text-sm font-black uppercase tracking-wider text-gold">
+                    Points
+                  </span>
+                </div>
+              </div>
+
+              {/* 3rd Place */}
+              <div className="order-3 flex flex-col justify-between rounded-2xl border border-amber-200 bg-gradient-to-b from-amber-50/50 to-orange-100/60 p-5 shadow-sm">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-tr from-amber-600 to-amber-300 font-serif text-lg font-bold text-white shadow-sm ring-1 ring-amber-400">
+                        🥉
+                      </div>
+                      <span className="rounded-full bg-amber-200/80 px-2.5 py-0.5 text-[10px] font-black uppercase text-amber-900">
+                        3rd Place
+                      </span>
+                    </div>
+                    <Award size={20} className="text-amber-600" />
+                  </div>
+                  <h3 className="mt-4 font-serif text-xl font-bold text-amber-950">
+                    {activeIndividualEntries[2]?.name}
+                  </h3>
+                  <p className="text-xs font-bold text-emerald">
+                    {activeIndividualEntries[2]?.registrationId}
+                  </p>
+                  <div className="mt-2 space-y-1 text-xs text-amber-800">
+                    <p>📍 {activeIndividualEntries[2]?.district}</p>
+                    <p>📑 {activeIndividualEntries[2]?.participatedCount} / {activeIndividualEntries[2]?.totalAvailablePrograms} Programs</p>
+                  </div>
+                </div>
+                <div className="mt-4 border-t border-amber-200 pt-3">
+                  <span className="text-2xl font-black text-amber-900">
+                    {activeIndividualEntries[2]?.totalPoints}
+                  </span>
+                  <span className="ml-1.5 text-xs font-bold text-amber-700 uppercase">Points</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Individual Table */}
+          <div className="mt-7 overflow-hidden rounded-2xl border border-ink/10">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-ink/10 bg-cream/50 text-[11px] font-bold uppercase tracking-wider text-muted">
+                    <th className="px-4 py-3.5 sm:px-6">Rank</th>
+                    <th className="px-4 py-3.5 sm:px-6">Participant</th>
+                    <th className="px-4 py-3.5 sm:px-6">District</th>
+                    <th className="px-4 py-3.5 text-center sm:px-6">Programmes Participated</th>
+                    <th className="px-4 py-3.5 text-right sm:px-6">Total Mark / Points</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-ink/5 text-sm font-semibold">
+                  {displayedIndividuals.map((item) => {
+                    const isGold = item.rank === 1;
+                    const isSilver = item.rank === 2;
+                    const isBronze = item.rank === 3;
+                    const isTop3 = isGold || isSilver || isBronze;
+
+                    return (
+                      <tr
+                        key={item.id}
+                        className={`transition-colors hover:bg-cream/40 ${
+                          isGold
+                            ? "bg-amber-50/50 font-bold"
+                            : isSilver
+                            ? "bg-slate-50/50"
+                            : isBronze
+                            ? "bg-orange-50/30"
+                            : ""
+                        }`}
+                      >
+                        {/* Rank / Badge */}
+                        <td className="px-4 py-4 sm:px-6">
+                          <RankBadge rank={item.rank} />
+                        </td>
+
+                        {/* Participant Name & Reg ID */}
+                        <td className="px-4 py-4 sm:px-6">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-serif text-base font-bold text-ink">
+                                {item.name}
+                              </span>
+                              <span className="rounded-full bg-emerald/10 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald">
+                                {item.registrationId}
+                              </span>
+                            </div>
+                            <span className="text-[11px] font-semibold text-muted">
+                              {item.gender === "male" ? "♂ Male" : "♀ Female"} • {item.category.replace("_", " ")}
                             </span>
                           </div>
-                          <span className="text-[11px] font-semibold text-muted">
-                            {item.gender === "male" ? "♂ Male" : "♀ Female"} • {item.category.replace("_", " ")}
+                        </td>
+
+                        {/* District */}
+                        <td className="px-4 py-4 sm:px-6">
+                          <span className="inline-flex items-center gap-1.5 text-xs font-bold text-ink/80">
+                            <MapPin size={14} className="text-gold" />
+                            {item.district}
                           </span>
-                        </div>
-                      </td>
+                        </td>
 
-                      {/* District */}
-                      <td className="px-4 py-4 sm:px-6">
-                        <span className="inline-flex items-center gap-1.5 text-xs font-bold text-ink/80">
-                          <MapPin size={14} className="text-gold" />
-                          {item.district}
-                        </span>
-                      </td>
+                        {/* Programmes Count Participated */}
+                        <td className="px-4 py-4 text-center sm:px-6">
+                          <span className="inline-flex items-center gap-1 rounded-xl bg-cream px-3 py-1 text-xs font-bold text-ink">
+                            <BookOpen size={13} className="text-muted" />
+                            {item.participatedCount}
+                            <span className="text-muted">/ {item.totalAvailablePrograms}</span>
+                          </span>
+                        </td>
 
-                      {/* Programmes Count Participated */}
-                      <td className="px-4 py-4 text-center sm:px-6">
-                        <span className="inline-flex items-center gap-1 rounded-xl bg-cream px-3 py-1 text-xs font-bold text-ink">
-                          <BookOpen size={13} className="text-muted" />
-                          {item.participatedCount}
-                          <span className="text-muted">/ {item.totalAvailablePrograms}</span>
-                        </span>
-                      </td>
+                        {/* Total Mark / Points */}
+                        <td className="px-4 py-4 text-right sm:px-6">
+                          <span
+                            className={`font-serif text-lg font-black ${
+                              isGold
+                                ? "text-emerald"
+                                : isSilver
+                                ? "text-slate-800"
+                                : isBronze
+                                ? "text-amber-800"
+                                : "text-ink"
+                            }`}
+                          >
+                            {item.totalPoints}
+                          </span>
+                          <span className="ml-1 text-[10px] font-bold uppercase text-muted">pts</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
 
-                      {/* Total Mark / Points */}
-                      <td className="px-4 py-4 text-right sm:px-6">
-                        <span
-                          className={`font-serif text-lg font-black ${
-                            isGold
-                              ? "text-emerald"
-                              : isSilver
-                              ? "text-slate-800"
-                              : isBronze
-                              ? "text-amber-800"
-                              : "text-ink"
-                          }`}
-                        >
-                          {item.totalPoints}
-                        </span>
-                        <span className="ml-1 text-[10px] font-bold uppercase text-muted">pts</span>
+                  {displayedIndividuals.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="p-8 text-center text-sm font-medium text-muted">
+                        No individual scores found for the selected category and filters.
                       </td>
                     </tr>
-                  );
-                })}
+                  )}
+                </tbody>
+              </table>
+            </div>
 
-                {displayedIndividuals.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="p-8 text-center text-sm font-medium text-muted">
-                      No individual scores found for the selected category and filters.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+            {/* Toggle Show Top 10 / Show All */}
+            {activeIndividualEntries.length > 10 && (
+              <div className="border-t border-ink/10 bg-cream/30 p-3 text-center">
+                <button
+                  onClick={() => setIndividualShowAll(!individualShowAll)}
+                  className="rounded-xl px-4 py-1.5 text-xs font-bold text-emerald hover:bg-emerald/10 transition-colors"
+                >
+                  {individualShowAll
+                    ? "Show Top 10 Only"
+                    : `View All ${activeIndividualEntries.length} Ranked Participants`}
+                </button>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 3: PROGRAM-WISE RESULTS (ONLY PUBLISHED PROGRAMMES)                   */}
+      {/* ========================================================================= */}
+      {activeTab === "programs" && (
+        <section className="relative rounded-3xl bg-white p-5 shadow-sm ring-1 ring-ink/5 sm:p-8">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="flex size-7 items-center justify-center rounded-xl bg-gold/20 text-gold">
+                  <Award size={17} />
+                </span>
+                <p className="text-xs font-bold uppercase tracking-[.25em] text-gold">
+                  Programme Standings
+                </p>
+              </div>
+              <h2 className="mt-1 font-serif text-2xl font-bold text-ink sm:text-3xl">
+                Published Program Results
+              </h2>
+              <p className="mt-1 text-xs font-medium text-muted sm:text-sm">
+                Official results, positions (1st, 2nd, 3rd) and grades for evaluated programmes.
+              </p>
+            </div>
+
+            {/* Category Filter Pills for Programs */}
+            <div className="flex flex-wrap items-center gap-1.5 rounded-2xl bg-cream/70 p-1.5 text-xs font-bold">
+              {(
+                [
+                  ["all", "All Published"],
+                  ["junior", "Junior"],
+                  ["senior", "Senior"],
+                  ["super_senior", "Super Senior"],
+                  ["general", "General"],
+                ] as const
+              ).map(([cat, label]) => {
+                const active = programCategory === cat;
+                return (
+                  <button
+                    key={cat}
+                    onClick={() => {
+                      setProgramCategory(cat);
+                      setSelectedProgramId("all");
+                    }}
+                    className={`rounded-xl px-3.5 py-2 transition-all ${
+                      active
+                        ? "bg-emerald text-white shadow-md shadow-emerald/20"
+                        : "text-muted hover:bg-white hover:text-ink"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          {/* Toggle Show Top 10 / Show All */}
-          {activeIndividualEntries.length > 10 && (
-            <div className="border-t border-ink/10 bg-cream/30 p-3 text-center">
-              <button
-                onClick={() => setIndividualShowAll(!individualShowAll)}
-                className="rounded-xl px-4 py-1.5 text-xs font-bold text-emerald hover:bg-emerald/10 transition-colors"
-              >
-                {individualShowAll
-                  ? "Show Top 10 Only"
-                  : `View All ${activeIndividualEntries.length} Ranked Participants`}
-              </button>
+          {/* Programme Quick Dropdown Select */}
+          {data.publishedPrograms.length > 1 && (
+            <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-ink/5 pt-4">
+              <div className="flex items-center gap-2 flex-1 max-w-md">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-muted whitespace-nowrap">
+                  Filter Programme:
+                </label>
+                <select
+                  value={selectedProgramId}
+                  onChange={(e) => setSelectedProgramId(e.target.value)}
+                  className="w-full rounded-xl border border-ink/15 bg-cream/40 px-3 py-2 text-xs font-bold text-ink outline-none focus:border-emerald"
+                >
+                  <option value="all">-- All Graded Programmes ({filteredPrograms.length}) --</option>
+                  {data.publishedPrograms.map((prog) => (
+                    <option key={prog.id} value={prog.id}>
+                      {prog.code} - {prog.name} ({prog.winners.length} winners)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <span className="text-xs font-bold text-muted">
+                {filteredPrograms.length} Published Programme{filteredPrograms.length === 1 ? "" : "s"}
+              </span>
             </div>
           )}
-        </div>
-      </section>
+
+          {/* List of Published Programs */}
+          <div className="mt-8 space-y-8">
+            {filteredPrograms.map((prog) => {
+              const firstPlace = prog.winners.find((w) => w.position === "1st");
+              const secondPlace = prog.winners.find((w) => w.position === "2nd");
+              const thirdPlace = prog.winners.find((w) => w.position === "3rd");
+              const hasPodium = Boolean(firstPlace || secondPlace || thirdPlace);
+
+              return (
+                <div
+                  key={prog.id}
+                  className="overflow-hidden rounded-3xl border border-ink/10 bg-gradient-to-b from-cream/20 to-white shadow-sm ring-1 ring-ink/5"
+                >
+                  {/* Program Header */}
+                  <div className="flex flex-col gap-3 border-b border-ink/10 bg-cream/40 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-lg bg-emerald px-2.5 py-1 text-xs font-black tracking-wider text-white">
+                          {prog.code}
+                        </span>
+                        <span className="rounded-full bg-cream px-3 py-0.5 text-[10px] font-bold uppercase text-muted">
+                          {prog.categoryEligibility.replace("_", " ")}
+                        </span>
+                        <span className="rounded-full bg-cream px-3 py-0.5 text-[10px] font-bold uppercase text-muted">
+                          {prog.genderEligibility === "general" ? "Open" : prog.genderEligibility}
+                        </span>
+                      </div>
+                      <h3 className="mt-2 font-serif text-2xl font-bold text-ink">
+                        {prog.name}
+                      </h3>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald/10 px-3.5 py-1.5 text-xs font-bold text-emerald">
+                        <CheckCircle2 size={15} />
+                        {prog.winners.length} Graded Winners
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Program Podium Banner (if 1st / 2nd / 3rd exist) */}
+                  {hasPodium && (
+                    <div className="border-b border-ink/5 bg-gradient-to-r from-amber-50/40 via-cream/30 to-amber-50/40 p-5 sm:p-6">
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        {/* 2nd Place */}
+                        <div
+                          className={`flex flex-col justify-between rounded-2xl border p-4 shadow-sm ${
+                            secondPlace
+                              ? "border-slate-300 bg-white"
+                              : "border-dashed border-ink/15 bg-cream/30 opacity-60"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="inline-flex size-8 items-center justify-center rounded-xl bg-slate-200 font-serif text-sm font-bold text-slate-800">
+                              🥈
+                            </span>
+                            <span className="text-[10px] font-black uppercase text-slate-600">
+                              2nd Place
+                            </span>
+                          </div>
+                          {secondPlace ? (
+                            <div className="mt-3">
+                              <h4 className="font-serif text-base font-bold text-slate-900 truncate">
+                                {secondPlace.name}
+                              </h4>
+                              <p className="text-xs font-bold text-emerald">{secondPlace.registrationId}</p>
+                              <p className="mt-1 text-[11px] text-muted">📍 {secondPlace.district}</p>
+                              <div className="mt-2 flex items-center justify-between border-t border-slate-100 pt-2 text-xs font-bold">
+                                <span className="text-slate-700">
+                                  {secondPlace.grade ? `Grade ${secondPlace.grade}` : "Runner Up"}
+                                </span>
+                                <span className="text-emerald font-black">{secondPlace.points} pts</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="mt-4 text-xs font-medium text-muted">No 2nd place awarded</p>
+                          )}
+                        </div>
+
+                        {/* 1st Place */}
+                        <div
+                          className={`flex flex-col justify-between rounded-2xl border-2 p-5 shadow-md ${
+                            firstPlace
+                              ? "border-gold bg-gradient-to-b from-amber-50/80 to-amber-100/40 ring-1 ring-gold/40 sm:-translate-y-1"
+                              : "border-dashed border-ink/15 bg-cream/30 opacity-60"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="inline-flex size-10 items-center justify-center rounded-2xl bg-gold font-serif text-lg font-black text-amber-950 shadow-sm">
+                              🥇
+                            </span>
+                            <span className="rounded-full bg-gold px-2.5 py-0.5 text-[10px] font-black uppercase text-emerald">
+                              ★ 1st Place Champion
+                            </span>
+                          </div>
+                          {firstPlace ? (
+                            <div className="mt-3">
+                              <h4 className="font-serif text-lg font-black text-ink truncate">
+                                {firstPlace.name}
+                              </h4>
+                              <p className="text-xs font-bold text-emerald">{firstPlace.registrationId}</p>
+                              <p className="mt-1 text-xs font-semibold text-ink/70">📍 {firstPlace.district}</p>
+                              <div className="mt-3 flex items-center justify-between border-t border-gold/30 pt-2 text-xs font-black">
+                                <span className="text-emerald">
+                                  {firstPlace.grade ? `Grade ${firstPlace.grade}` : "Winner"}
+                                </span>
+                                <span className="font-serif text-base text-emerald">{firstPlace.points} pts</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="mt-4 text-xs font-medium text-muted">No 1st place awarded</p>
+                          )}
+                        </div>
+
+                        {/* 3rd Place */}
+                        <div
+                          className={`flex flex-col justify-between rounded-2xl border p-4 shadow-sm ${
+                            thirdPlace
+                              ? "border-amber-300 bg-white"
+                              : "border-dashed border-ink/15 bg-cream/30 opacity-60"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="inline-flex size-8 items-center justify-center rounded-xl bg-amber-200 font-serif text-sm font-bold text-amber-900">
+                              🥉
+                            </span>
+                            <span className="text-[10px] font-black uppercase text-amber-800">
+                              3rd Place
+                            </span>
+                          </div>
+                          {thirdPlace ? (
+                            <div className="mt-3">
+                              <h4 className="font-serif text-base font-bold text-amber-950 truncate">
+                                {thirdPlace.name}
+                              </h4>
+                              <p className="text-xs font-bold text-emerald">{thirdPlace.registrationId}</p>
+                              <p className="mt-1 text-[11px] text-muted">📍 {thirdPlace.district}</p>
+                              <div className="mt-2 flex items-center justify-between border-t border-amber-100 pt-2 text-xs font-bold">
+                                <span className="text-amber-800">
+                                  {thirdPlace.grade ? `Grade ${thirdPlace.grade}` : "3rd Rank"}
+                                </span>
+                                <span className="text-emerald font-black">{thirdPlace.points} pts</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="mt-4 text-xs font-medium text-muted">No 3rd place awarded</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Program Winners Full Table */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                      <thead>
+                        <tr className="border-b border-ink/10 bg-cream/30 text-[11px] font-bold uppercase tracking-wider text-muted">
+                          <th className="px-4 py-3 sm:px-6">Position / Rank</th>
+                          <th className="px-4 py-3 sm:px-6">Participant</th>
+                          <th className="px-4 py-3 sm:px-6">District</th>
+                          <th className="px-4 py-3 text-center sm:px-6">Grade</th>
+                          <th className="px-4 py-3 text-center sm:px-6">Standing</th>
+                          <th className="px-4 py-3 text-right sm:px-6">Points</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-ink/5 text-sm font-semibold">
+                        {prog.winners.map((w) => {
+                          const isGold = w.rank === 1;
+                          const isSilver = w.rank === 2;
+                          const isBronze = w.rank === 3;
+
+                          return (
+                            <tr
+                              key={w.participantId}
+                              className={`transition-colors hover:bg-cream/40 ${
+                                isGold
+                                  ? "bg-amber-50/50"
+                                  : isSilver
+                                  ? "bg-slate-50/50"
+                                  : isBronze
+                                  ? "bg-orange-50/30"
+                                  : ""
+                              }`}
+                            >
+                              {/* Position / Rank */}
+                              <td className="px-4 py-3.5 sm:px-6">
+                                <RankBadge rank={w.rank} />
+                              </td>
+
+                              {/* Participant */}
+                              <td className="px-4 py-3.5 sm:px-6">
+                                <div>
+                                  <span className="font-serif text-base font-bold text-ink">
+                                    {w.name}
+                                  </span>
+                                  <span className="ml-2 rounded-full bg-emerald/10 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald">
+                                    {w.registrationId}
+                                  </span>
+                                </div>
+                              </td>
+
+                              {/* District */}
+                              <td className="px-4 py-3.5 sm:px-6">
+                                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-ink/80">
+                                  <MapPin size={13} className="text-gold" />
+                                  {w.district}
+                                </span>
+                              </td>
+
+                              {/* Grade */}
+                              <td className="px-4 py-3.5 text-center sm:px-6">
+                                {w.grade ? (
+                                  <span className="inline-flex items-center rounded-lg bg-emerald/10 px-2.5 py-1 text-xs font-black text-emerald">
+                                    Grade {w.grade}
+                                  </span>
+                                ) : (
+                                  <span className="text-xs text-muted">—</span>
+                                )}
+                              </td>
+
+                              {/* Standing */}
+                              <td className="px-4 py-3.5 text-center sm:px-6">
+                                {w.position ? (
+                                  <span
+                                    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-black uppercase ${
+                                      w.position === "1st"
+                                        ? "bg-gold text-emerald"
+                                        : w.position === "2nd"
+                                        ? "bg-slate-200 text-slate-800"
+                                        : "bg-amber-200 text-amber-900"
+                                    }`}
+                                  >
+                                    {w.position} Place
+                                  </span>
+                                ) : (
+                                  <span className="text-xs font-bold text-muted">
+                                    Rank #{w.rank}
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* Points */}
+                              <td className="px-4 py-3.5 text-right sm:px-6">
+                                <span className="font-serif text-base font-black text-emerald">
+                                  {w.points}
+                                </span>
+                                <span className="ml-1 text-[10px] font-bold uppercase text-muted">pts</span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })}
+
+            {filteredPrograms.length === 0 && (
+              <div className="rounded-2xl border border-dashed border-ink/20 p-12 text-center">
+                <Award size={32} className="mx-auto text-muted/50 mb-3" />
+                <h3 className="font-serif text-lg font-bold text-ink">No Program Results Published Yet</h3>
+                <p className="mt-1 text-xs font-medium text-muted">
+                  Results for this category will appear here automatically once program evaluation and marks are submitted by administrators.
+                </p>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* Footer Navigation */}
       <div className="flex flex-col items-center justify-between gap-4 rounded-2xl bg-cream/50 p-6 sm:flex-row">
         <div>
           <p className="font-serif text-lg font-bold text-ink">Ahlu Saada Islamic Fest 2026</p>
-          <p className="text-xs text-muted">Official Leaderboards & Standings</p>
+          <p className="text-xs text-muted">Official Leaderboards, District Standings & Program Results</p>
         </div>
         <Link
           href="/"

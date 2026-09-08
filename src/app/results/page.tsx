@@ -1,6 +1,13 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { DISTRICTS } from "@/lib/constants";
-import { ResultsClient, ResultsDataPayload, DistrictLeaderEntry, IndividualLeaderEntry } from "./results-client";
+import {
+  ResultsClient,
+  ResultsDataPayload,
+  DistrictLeaderEntry,
+  IndividualLeaderEntry,
+  PublishedProgramResult,
+  ProgramWinnerEntry,
+} from "./results-client";
 import Link from "next/link";
 import { Trophy, ArrowLeft } from "lucide-react";
 
@@ -62,7 +69,8 @@ export default async function ResultsPage() {
     ),
     db
       .from("programs")
-      .select("id, category_eligibility, gender_eligibility"),
+      .select("id, code, name, category_eligibility, gender_eligibility")
+      .order("code"),
     db
       .from("app_settings")
       .select("maximum_programs_per_participant, point_rules")
@@ -82,6 +90,12 @@ export default async function ResultsPage() {
         (p.gender_eligibility === "general" || p.gender_eligibility === gender)
     ).length;
   };
+
+  // Participant quick lookup map
+  const participantLookup = new Map<string, (typeof rawParticipants)[0]>();
+  for (const p of rawParticipants) {
+    participantLookup.set(p.id, p);
+  }
 
   // Map participant_programs by participant_id to aggregate marks/points and awards
   const participantProgramsMap = new Map<
@@ -265,6 +279,98 @@ export default async function ResultsPage() {
     });
   }
 
+  // =========================================================================
+  // BUILD PUBLISHED PROGRAM-WISE RESULTS (ONLY PROGRAMS WITH AWARDED MARKS)
+  // =========================================================================
+  const posOrder: Record<string, number> = { "1st": 1, "2nd": 2, "3rd": 3 };
+  const gradeOrder: Record<string, number> = { A: 1, B: 2, C: 3 };
+
+  const publishedPrograms: PublishedProgramResult[] = [];
+
+  for (const prog of rawPrograms) {
+    const winners: ProgramWinnerEntry[] = [];
+
+    for (const pp of rawPP) {
+      if (pp.program_id !== prog.id) continue;
+      let points = typeof pp.result_points === "number" ? pp.result_points : 0;
+      const hasGrade = Boolean(pp.result_grade && pp.result_grade !== "None");
+      const hasPosition = Boolean(pp.result_position && pp.result_position !== "None");
+
+      // Only include if mark/grade/position was actually awarded!
+      if (!hasGrade && !hasPosition && points <= 0) continue;
+
+      if (points === 0 && (hasGrade || hasPosition)) {
+        const g = pp.result_grade;
+        const p = pp.result_position;
+        const gPts = g === "A" ? 5 : g === "B" ? 3 : g === "C" ? 1 : 0;
+        const pPts = p === "1st" ? 5 : p === "2nd" ? 3 : p === "3rd" ? 1 : 0;
+        points = gPts + pPts;
+      }
+
+      const p = participantLookup.get(pp.participant_id);
+      if (!p) continue;
+
+      winners.push({
+        participantId: p.id,
+        registrationId: p.registration_id,
+        name: p.name,
+        district: p.district,
+        gender: p.gender as "male" | "female",
+        category: p.category as "junior" | "senior" | "super_senior",
+        grade: hasGrade ? pp.result_grade : null,
+        position: hasPosition ? pp.result_position : null,
+        points,
+        rank: 0,
+        isPodium: false,
+      });
+    }
+
+    // Only include this programme if at least 1 result has been published/awarded!
+    if (winners.length > 0) {
+      // Sort winners: 1st -> 2nd -> 3rd -> Non-podium by Points desc, Grade asc (A->B->C), Name asc
+      winners.sort((a, b) => {
+        const posA = a.position ? posOrder[a.position] || 99 : 99;
+        const posB = b.position ? posOrder[b.position] || 99 : 99;
+        if (posA !== posB) return posA - posB;
+
+        if (b.points !== a.points) return b.points - a.points;
+
+        const grdA = a.grade ? gradeOrder[a.grade] || 99 : 99;
+        const grdB = b.grade ? gradeOrder[b.grade] || 99 : 99;
+        if (grdA !== grdB) return grdA - grdB;
+
+        return a.name.localeCompare(b.name);
+      });
+
+      // Assign clear sequential ranks: 1, 2, 3 for podium, 4, 5, 6... for grade holders
+      winners.forEach((w, idx) => {
+        if (w.position === "1st") {
+          w.rank = 1;
+          w.isPodium = true;
+        } else if (w.position === "2nd") {
+          w.rank = 2;
+          w.isPodium = true;
+        } else if (w.position === "3rd") {
+          w.rank = 3;
+          w.isPodium = true;
+        } else {
+          w.rank = idx + 1;
+          w.isPodium = false;
+        }
+      });
+
+      publishedPrograms.push({
+        id: prog.id,
+        code: prog.code,
+        name: prog.name,
+        categoryEligibility: prog.category_eligibility,
+        genderEligibility: prog.gender_eligibility,
+        totalAwarded: winners.length,
+        winners,
+      });
+    }
+  }
+
   // Compile full real-time database calculated payload
   const overallDistricts = buildDistrictList("all", "all");
   const leadingDistrict = overallDistricts.length > 0 && overallDistricts[0].totalPoints > 0 ? overallDistricts[0].district : overallDistricts[0]?.district || "—";
@@ -310,10 +416,12 @@ export default async function ResultsPage() {
         female: buildIndividualList("super_senior", "female"),
       },
     },
+    publishedPrograms,
     stats: {
       totalPoints: totalPointsFest,
       totalActiveParticipants: rawParticipants.length,
       totalSubmissions: totalSubmissionsFest,
+      totalPublishedPrograms: publishedPrograms.length,
       leadingDistrict,
       leadingDistrictPoints,
     },
@@ -350,7 +458,7 @@ export default async function ResultsPage() {
             Results & Leaderboards
           </h1>
           <p className="mx-auto mt-3 max-w-2xl text-sm font-medium text-muted sm:text-base">
-            Live standings for Ahlu Saada Islamic Fest 2026 across Junior, Senior & Super Senior divisions with individual and district lead scores.
+            Live standings for Ahlu Saada Islamic Fest 2026 across Junior, Senior & Super Senior divisions with individual, district and program results.
           </p>
         </header>
 
