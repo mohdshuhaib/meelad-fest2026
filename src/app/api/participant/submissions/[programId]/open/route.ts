@@ -27,12 +27,12 @@ export async function POST(
     );
   if (!s || !program?.submission_form_url)
     return NextResponse.json(
-      { message: "Submission form is not configured for this programme." },
+      { message: "Submission link is not configured for this programme." },
       { status: 404 },
     );
   if (s.form_opened_at)
     return NextResponse.json(
-      { message: "Submission form has already been opened once. If you encountered an error, please ask the admin for a reset." },
+      { message: "Submission link has already been opened once. If you encountered an error, please ask the admin for a reset." },
       { status: 403 },
     );
   const url = new URL(program.submission_form_url);

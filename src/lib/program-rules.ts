@@ -73,6 +73,20 @@ export function isBookTestProgram(program?: {
   );
 }
 
+export function isQuizProgram(program?: {
+  code?: string | null;
+  name?: string | null;
+} | null): boolean {
+  if (!program) return false;
+  const code = (program.code || "").toUpperCase().trim();
+  const name = (program.name || "").toUpperCase().trim();
+  return (
+    code === "GG003" ||
+    code.startsWith("GG003") ||
+    name.includes("QUIZ")
+  );
+}
+
 export function generateCampaignDateList(
   startDate?: string | null,
   endDate?: string | null

@@ -127,16 +127,19 @@ export function ProgramForm() {
           <>
             <Field
               name="submission_form_url"
-              label="Google Form URL"
+              label="Submission / Quiz Website URL"
               type="url"
+              placeholder="https://... (Website link or Google Form URL)"
             />
             <Field
               name="registration_id_entry_key"
-              label="Registration ID entry key"
+              label="Registration ID entry key (Optional - Google Forms only)"
+              placeholder="Leave blank for Quiz websites"
             />
             <Field
               name="full_name_entry_key"
-              label="Full Name entry key"
+              label="Full Name entry key (Optional - Google Forms only)"
+              placeholder="Leave blank for Quiz websites"
             />
           </>
         )}
@@ -178,10 +181,12 @@ function Field({
   name,
   label,
   type = "text",
+  placeholder,
 }: {
   name: string;
   label: string;
   type?: string;
+  placeholder?: string;
 }) {
   return (
     <label className="text-sm font-bold">
@@ -190,7 +195,10 @@ function Field({
         required={name === "code" || name === "name"}
         name={name}
         type={type}
-        className="mt-2 h-11 w-full rounded-xl border border-ink/15 px-3 uppercase"
+        placeholder={placeholder}
+        className={`mt-2 h-11 w-full rounded-xl border border-ink/15 px-3 ${
+          type === "url" ? "normal-case" : "uppercase"
+        }`}
       />
     </label>
   );

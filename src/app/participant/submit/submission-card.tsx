@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { ExternalLink, LoaderCircle, BookOpen } from "lucide-react";
 import { titleCase, visibleStatus } from "@/lib/program-status";
-import { isSwalathProgram, isBookTestProgram } from "@/lib/program-rules";
+import { isSwalathProgram, isBookTestProgram, isQuizProgram } from "@/lib/program-rules";
 import { SwalathTracker } from "./swalath-tracker";
 import { BookReaderModal } from "../book-reader-modal";
 
@@ -40,6 +40,7 @@ export function SubmissionCard({
 
   const isSwalath = isSwalathProgram(s.program);
   const isBookTest = isBookTestProgram(s.program);
+  const isQuiz = isQuizProgram(s.program);
 
   async function openForm() {
     setPending(true);
@@ -187,9 +188,17 @@ export function SubmissionCard({
           {canOpenForm && (
             <>
               <div className="mt-5 rounded-xl bg-amber-50 p-3 text-xs font-semibold leading-5 text-amber-900">
-                A GOOGLE ACCOUNT MAY BE REQUIRED TO UPLOAD YOUR PROGRAMME ENTRY.
-                AFTER SUBMITTING THE GOOGLE FORM, RETURN TO THIS DASHBOARD AND MARK
-                THE PROGRAMME AS SUBMITTED.
+                {isQuiz ? (
+                  <>
+                    CLICK THE BUTTON BELOW TO OPEN THE QUIZ WEBSITE AND ATTEND THE QUIZ.
+                    AFTER COMPLETING THE QUIZ, RETURN TO THIS DASHBOARD AND MARK THE PROGRAMME AS SUBMITTED.
+                  </>
+                ) : (
+                  <>
+                    CLICK THE BUTTON BELOW TO OPEN THE SUBMISSION FORM/LINK.
+                    AFTER COMPLETING YOUR ENTRY, RETURN TO THIS DASHBOARD AND MARK THE PROGRAMME AS SUBMITTED.
+                  </>
+                )}
               </div>
               <button
                 onClick={openForm}
@@ -201,7 +210,13 @@ export function SubmissionCard({
                 ) : (
                   <ExternalLink size={18} />
                 )}
-                {needsResubmission ? "Open resubmission form" : "Open submission form"}
+                {isQuiz
+                  ? needsResubmission
+                    ? "Open quiz website again"
+                    : "Attend Quiz / Open Website"
+                  : needsResubmission
+                  ? "Open resubmission form"
+                  : "Open submission form"}
               </button>
             </>
           )}
@@ -214,7 +229,9 @@ export function SubmissionCard({
 
           {awaitingOrVerified && (
             <p className="mt-4 rounded-xl bg-emerald/5 p-3 text-xs font-semibold text-emerald">
-              The submission form is hidden because this programme has already been submitted.
+              {isQuiz
+                ? "The quiz link is hidden because this programme has already been submitted."
+                : "The submission form is hidden because this programme has already been submitted."}
             </p>
           )}
 
@@ -227,8 +244,9 @@ export function SubmissionCard({
                   onChange={(e) => setConfirm(e.target.checked)}
                   className="mt-1 accent-emerald"
                 />
-                I CONFIRM THAT I HAVE COMPLETED AND SUBMITTED THE GOOGLE FORM FOR
-                THIS PROGRAMME.
+                {isQuiz
+                  ? "I CONFIRM THAT I HAVE ATTENDED AND COMPLETED THE QUIZ ON THE WEBSITE."
+                  : "I CONFIRM THAT I HAVE COMPLETED AND SUBMITTED THE FORM / ENTRY FOR THIS PROGRAMME."}
               </label>
               <button
                 onClick={claim}

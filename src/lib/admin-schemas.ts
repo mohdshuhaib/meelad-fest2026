@@ -22,16 +22,17 @@ export const programSchema = z.object({
       z.literal(""),
       z
         .string()
-        .url()
+        .url({ message: "Please enter a valid URL (e.g. https://...)" })
         .refine(
           (v) => {
             try {
-              return new URL(v).hostname.endsWith("google.com");
+              const u = new URL(v);
+              return u.protocol === "http:" || u.protocol === "https:";
             } catch {
               return false;
             }
           },
-          { message: "Use a valid Google Forms URL" }
+          { message: "URL must begin with http:// or https://" }
         ),
     ])
     .optional()

@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { LoaderCircle, Pencil, X, Sparkles } from "lucide-react";
-import { isSwalathProgram } from "@/lib/program-rules";
+import { isSwalathProgram, isQuizProgram } from "@/lib/program-rules";
 
 type EditableProgram = {
   id: string;
@@ -26,6 +26,7 @@ export function ProgramEdit({ program }: { program: EditableProgram }) {
   const [error, setError] = useState("");
 
   const isSwalath = isSwalathProgram(program);
+  const isQuiz = isQuizProgram(program);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -128,42 +129,50 @@ export function ProgramEdit({ program }: { program: EditableProgram }) {
               ) : (
                 <>
                   <label className="block text-sm font-bold">
-                    Google Form URL
+                    {isQuiz ? "Quiz Website URL" : "Submission / Form URL"}
                     <input
                       name="submission_form_url"
                       type="url"
                       defaultValue={program.submission_form_url ?? ""}
-                      placeholder="https://docs.google.com/forms/..."
+                      placeholder={
+                        isQuiz
+                          ? "https://... (Website link for attending the quiz)"
+                          : "https://... (Google Form or Website URL)"
+                      }
                       className="mt-2 h-11 w-full rounded-xl border border-ink/15 px-3"
                     />
                     <span className="mt-1 block text-xs font-normal text-muted">
-                      May be left blank until the programme form is ready.
+                      {isQuiz
+                        ? "Enter the website link where participants attend the online quiz."
+                        : "May be left blank until the programme link/form is ready."}
                     </span>
                   </label>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <label className="text-sm font-bold">
-                      Registration ID entry key
-                      <input
-                        name="registration_id_entry_key"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        defaultValue={program.registration_id_entry_key ?? ""}
-                        placeholder="123456789"
-                        className="mt-2 h-11 w-full rounded-xl border border-ink/15 px-3"
-                      />
-                    </label>
-                    <label className="text-sm font-bold">
-                      Full Name entry key
-                      <input
-                        name="full_name_entry_key"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        defaultValue={program.full_name_entry_key ?? ""}
-                        placeholder="987654321"
-                        className="mt-2 h-11 w-full rounded-xl border border-ink/15 px-3"
-                      />
-                    </label>
-                  </div>
+                  {!isQuiz && (
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <label className="text-sm font-bold">
+                        Registration ID entry key
+                        <input
+                          name="registration_id_entry_key"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          defaultValue={program.registration_id_entry_key ?? ""}
+                          placeholder="123456789 (Optional)"
+                          className="mt-2 h-11 w-full rounded-xl border border-ink/15 px-3"
+                        />
+                      </label>
+                      <label className="text-sm font-bold">
+                        Full Name entry key
+                        <input
+                          name="full_name_entry_key"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          defaultValue={program.full_name_entry_key ?? ""}
+                          placeholder="987654321 (Optional)"
+                          className="mt-2 h-11 w-full rounded-xl border border-ink/15 px-3"
+                        />
+                      </label>
+                    </div>
+                  )}
                 </>
               )}
 
