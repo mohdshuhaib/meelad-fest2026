@@ -129,21 +129,21 @@ export function ProgramEdit({ program }: { program: EditableProgram }) {
               ) : (
                 <>
                   <label className="block text-sm font-bold">
-                    {isQuiz ? "Quiz Website URL" : "Submission / Form URL"}
+                    {isQuiz ? "Quiz / Test Website URL" : "Submission / Form URL"}
                     <input
                       name="submission_form_url"
                       type="url"
                       defaultValue={program.submission_form_url ?? ""}
                       placeholder={
                         isQuiz
-                          ? "https://... (Website link for attending the quiz)"
+                          ? "https://... (Website link for attending the quiz / test)"
                           : "https://... (Google Form or Website URL)"
                       }
                       className="mt-2 h-11 w-full rounded-xl border border-ink/15 px-3"
                     />
                     <span className="mt-1 block text-xs font-normal text-muted">
                       {isQuiz
-                        ? "Enter the website link where participants attend the online quiz."
+                        ? "Enter the website link where participants attend the online quiz/test. Google Form entry keys are not required."
                         : "May be left blank until the programme link/form is ready."}
                     </span>
                   </label>

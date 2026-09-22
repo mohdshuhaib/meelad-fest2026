@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getParticipant } from "@/lib/participant-session";
 import { createAdminClient } from "@/lib/supabase/admin";
+
 export async function POST(
   _: Request,
   { params }: { params: Promise<{ programId: string }> },
@@ -8,6 +9,7 @@ export async function POST(
   const p = await getParticipant();
   if (!p)
     return NextResponse.json({ message: "Session expired." }, { status: 401 });
+
   const { programId } = await params;
   const admin = createAdminClient();
   const { data: s } = await admin
@@ -18,23 +20,30 @@ export async function POST(
     .eq("participant_id", p.id)
     .eq("program_id", programId)
     .maybeSingle();
+
   const program = Array.isArray(s?.programs) ? s.programs[0] : s?.programs;
   const resubmissionAllowed = s?.verification_status === "resubmission_required";
+
   if (program?.global_status !== "ongoing" && !resubmissionAllowed)
     return NextResponse.json(
       { message: "Submissions are available only while this programme is ongoing." },
       { status: 409 },
     );
+
   if (!s || !program?.submission_form_url)
     return NextResponse.json(
       { message: "Submission link is not configured for this programme." },
       { status: 404 },
     );
-  if (s.form_opened_at)
+
+  // If already submitted and awaiting verification or verified, disallow opening
+  if (["pending_verification", "verified"].includes(s.verification_status)) {
     return NextResponse.json(
-      { message: "Submission link has already been opened once. If you encountered an error, please ask the admin for a reset." },
+      { message: "This programme has already been submitted." },
       { status: 403 },
     );
+  }
+
   const url = new URL(program.submission_form_url);
   if (program.registration_id_entry_key)
     url.searchParams.set(
@@ -43,13 +52,22 @@ export async function POST(
     );
   if (program.full_name_entry_key)
     url.searchParams.set(`entry.${program.full_name_entry_key}`, p.name);
-  const now = new Date().toISOString();
-  const update: Record<string, string> = { form_opened_at: now };
+
+  // Record form_opened_at timestamp and set status to ongoing if not already set
+  const update: Record<string, string> = {};
+  if (!s.form_opened_at) {
+    update.form_opened_at = new Date().toISOString();
+  }
   if (
     s.participant_progress_status === "not_started" ||
     ["rejected", "resubmission_required"].includes(s.verification_status)
-  )
+  ) {
     update.participant_progress_status = "ongoing";
-  await admin.from("participant_programs").update(update).eq("id", s.id);
+  }
+
+  if (Object.keys(update).length > 0) {
+    await admin.from("participant_programs").update(update).eq("id", s.id);
+  }
+
   return NextResponse.json({ url: url.toString() });
 }

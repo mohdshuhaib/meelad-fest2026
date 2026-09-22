@@ -83,7 +83,12 @@ export function isQuizProgram(program?: {
   return (
     code === "GG003" ||
     code.startsWith("GG003") ||
-    name.includes("QUIZ")
+    code === "FS001" ||
+    code.startsWith("FS001") ||
+    code === "FSS001_BOOK" ||
+    name.includes("QUIZ") ||
+    name.includes("BOOK TEST") ||
+    name.includes("BOOKTEST")
   );
 }
 
